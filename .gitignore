@@ -75,8 +75,9 @@ mandibhav.db
 mandibhav.db-shm
 mandibhav.db-wal
 
-# Generated article output (runtime artifacts)
+# Generated article output and static site output (runtime artifacts)
 output/
+site/
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
