@@ -21,7 +21,7 @@
       <div class="commodity-header-info">
         <div style="display: flex; gap: var(--space-xs); align-items: center; flex-wrap: wrap;">
           <span class="card-tag {{ 'tag-soybean' if commodity.slug == 'soybean' else 'tag-cotton' }}">
-            {{ '🌱' if commodity.slug == 'soybean' else '🌾' }} {{ commodity.name }}
+            {{ commodity.name }}
           </span>
           <span class="article-type-badge">{{ total_articles }} reports today</span>
           {% if current_lang != 'en' %}
@@ -35,7 +35,7 @@
         {# Language Variants #}
         {% if lang_variants %}
         <div style="margin-top: var(--space-lg); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">🌐 Read in:</span>
+          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Read in:</span>
           {% for v in lang_variants %}
           <a href="{{ base_url }}{{ v.url }}"
              class="lang-pill {% if v.code == current_lang %}current{% endif %}"
@@ -48,7 +48,7 @@
       {# Right MSP Badge Column #}
       {% if msp_info %}
       <div class="msp-badge-box">
-        <div class="msp-badge-label">📋 Govt. MSP {{ msp_info.year }}</div>
+        <div class="msp-badge-label">Govt. MSP {{ msp_info.year }}</div>
         <div class="msp-badge-val">₹{{ "{:,.0f}".format(msp_info.value) }}</div>
         <div class="msp-badge-sub">per quintal</div>
       </div>
@@ -65,7 +65,7 @@
 <div class="container" style="padding-top: var(--space-2xl); padding-bottom: var(--space-3xl);">
   {% for group in article_groups %}
   <section style="margin-bottom: var(--space-2xl);">
-    <h2 class="group-heading">📂 {{ group.type_label }}</h2>
+    <h2 class="group-heading">{{ group.type_label }}</h2>
     
     <div class="article-list">
       {% for a in group.articles %}
@@ -73,7 +73,7 @@
         <div>
           <div class="article-list-title">{{ a.title }}</div>
           <div class="article-list-meta" style="margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span>📅 {{ a.date }}</span>
+            <span>{{ a.date }}</span>
             {% if a.scope_label %}
             <span>•</span>
             <span>{{ a.scope_label }}</span>

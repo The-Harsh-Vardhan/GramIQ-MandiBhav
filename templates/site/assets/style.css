@@ -277,20 +277,58 @@ main {
   align-items: center;
 }
 
-.lang-pill {
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
+#google_translate_element {
+  display: inline-flex;
+  align-items: center;
+}
+
+.goog-te-combo {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
   font-weight: 600;
-  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  outline: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.goog-te-combo:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.goog-te-gadget {
+  color: transparent !important;
+  font-size: 0px !important;
+}
+
+.goog-te-gadget span {
+  display: none !important;
+}
+
+.lang-pill {
+  padding: 10px 22px;
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 600;
+  background-color: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .lang-pill:hover {
   border-color: var(--primary);
   color: var(--primary);
+  background-color: var(--green-50);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .lang-pill.current {
@@ -300,10 +338,14 @@ main {
 }
 
 /* ==========================================================================
-   Hero Section
+   Hero Section - Background Image with Overlay
    ========================================================================== */
 .hero {
-  background: radial-gradient(circle at top right, #f0fdf4 0%, #FFFFFF 60%);
+  position: relative;
+  background-image: linear-gradient(rgba(26, 37, 28, 0.82), rgba(26, 37, 28, 0.65)), url('hero-bg.png');
+  background-size: cover;
+  background-position: center;
+  color: #FFFFFF;
   padding: var(--space-3xl) 0 var(--space-2xl);
   border-bottom: 1px solid var(--border);
 }
@@ -322,15 +364,15 @@ main {
 }
 
 .hero-tag {
-  background-color: var(--green-50);
-  color: var(--primary);
+  background-color: rgba(240, 253, 244, 0.15);
+  color: #a3f7bf;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 6px 16px;
   border-radius: var(--radius-full);
-  border: 1.5px solid var(--green-100);
+  border: 1.5px solid rgba(220, 252, 231, 0.25);
   margin-bottom: var(--space-lg);
 }
 
@@ -338,15 +380,16 @@ main {
   font-size: clamp(2rem, 4vw, 3rem);
   line-height: 1.15;
   margin-bottom: var(--space-md);
+  color: #FFFFFF;
 }
 
 .hero h1 span {
-  color: var(--primary);
+  color: #a3f7bf;
 }
 
 .hero-sub {
   font-size: 1.1rem;
-  color: var(--text-secondary);
+  color: #e2e8f0;
   margin-bottom: var(--space-xl);
   line-height: 1.7;
 }
@@ -357,6 +400,16 @@ main {
   margin-bottom: var(--space-2xl);
   width: 100%;
   flex-wrap: wrap;
+}
+
+.hero-actions .btn-outline {
+  color: #FFFFFF !important;
+  border-color: #FFFFFF;
+}
+
+.hero-actions .btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF !important;
 }
 
 /* Client search box */
@@ -429,7 +482,7 @@ main {
 .hero-stats {
   display: flex;
   gap: var(--space-xl);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
   padding-top: var(--space-lg);
   width: 100%;
 }
@@ -442,13 +495,13 @@ main {
 .hero-stat-val {
   font-size: 1.8rem;
   font-weight: 800;
-  color: var(--primary);
+  color: #a3f7bf;
   font-family: var(--font-title);
 }
 
 .hero-stat-lbl {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #cbd5e1;
   font-weight: 500;
   text-transform: uppercase;
 }

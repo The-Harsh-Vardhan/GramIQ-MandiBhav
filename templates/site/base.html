@@ -82,12 +82,32 @@
 
   {# ---- Styles & Fonts ---- #}
   <link rel="stylesheet" href="{{ base_url }}/assets/style.css">
+
+  {# ---- Google Translate Widget Init ---- #}
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,hi,mr,gu,pa,kn,ta,te,bn,ml,or,as,ur',
+        autoDisplay: false
+      }, 'google_translate_element');
+    }
+
+    function translateLanguage(langCode) {
+      var select = document.querySelector('.goog-te-combo');
+      if (select) {
+        select.value = langCode;
+        select.dispatchEvent(new Event('change'));
+      }
+    }
+  </script>
+  <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </head>
 <body>
 
 {# ---- Top Announcement Bar ---- #}
 <div class="header-announce">
-  🌿 Free daily mandi bhav reports — सोयाबीन · कपास — 4 भाषाओं में &nbsp;|&nbsp;
+  Free daily mandi bhav reports — सोयाबीन · कपास — 4 भाषाओं में &nbsp;|&nbsp;
   <a href="{{ base_url }}/rss.xml">Subscribe via RSS</a>
 </div>
 
@@ -95,7 +115,10 @@
 <header class="navbar">
   <div class="container">
     <a href="{{ base_url }}/" class="navbar-brand" id="site-logo">
-      <span class="brand-icon">🌾</span>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 4px;">
+        <path d="M12 2C12 2 17 7.5 17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 7.5 12 2 12 2Z" fill="#273A29"/>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12H2C2 17.5228 6.47715 22 12 22Z" fill="#273A29"/>
+      </svg>
       <div class="brand-text">
         <span class="brand-name">MandiBhav</span>
         <span class="brand-sub">by GramIQ</span>
@@ -111,15 +134,7 @@
     </nav>
 
     <div class="lang-switcher" aria-label="Language switcher" id="lang-switcher">
-      {% set lang_map = [('en','EN'),('hi','हि'),('mr','म'),('gu','ગુ')] %}
-      {% for code, label in lang_map %}
-        {% if lang_urls and lang_urls[code] is defined %}
-        <a href="{{ lang_urls[code] }}" class="lang-pill {% if current_lang == code %}current{% endif %}"
-           aria-label="{{ code }}" id="lang-{{ code }}">{{ label }}</a>
-        {% else %}
-        <span class="lang-pill {% if current_lang == code %}current{% endif %}" id="lang-{{ code }}-disabled">{{ label }}</span>
-        {% endif %}
-      {% endfor %}
+      <div id="google_translate_element"></div>
     </div>
   </div>
 </header>
@@ -134,7 +149,7 @@
   <div class="container">
     <div class="footer-layout">
       <div class="footer-brand">
-        <h3>🌾 MandiBhav by GramIQ</h3>
+        <h3>MandiBhav by GramIQ</h3>
         <p>
           AI-powered agricultural market intelligence for Indian farmers. Providing verified daily APMC prices in 4 languages: English, हिंदी, मराठी, and ગુજરાતી.
         </p>
@@ -145,8 +160,8 @@
       <div class="footer-links-col">
         <h4>Commodities</h4>
         <div class="footer-links">
-          <a href="{{ base_url }}/soybean/">🌱 Soybean Rates</a>
-          <a href="{{ base_url }}/cotton/">🌾 Cotton Rates</a>
+          <a href="{{ base_url }}/soybean/">Soybean Rates</a>
+          <a href="{{ base_url }}/cotton/">Cotton Rates</a>
         </div>
       </div>
       <div class="footer-links-col">

@@ -10,15 +10,15 @@
     
     {# Left Content Column #}
     <div class="hero-content">
-      <div class="hero-tag">🌿 Live Daily Updates</div>
-      <h1>आज का मंडी भाव<br><span>Mandi Prices by GramIQ</span></h1>
+      <div class="hero-tag">Live Daily Updates</div>
+      <h1>AI-Powered Agricultural<br><span>Market Intelligence</span></h1>
       <p class="hero-sub">
-        Soybean &amp; Cotton rates from across India. Verified daily government APMC market data, analyzed by AI, in your own language.
+        Daily Mandi rates, market insights, and price trends across India — in your language. Sourced directly from verified government APMC databases.
       </p>
 
       <div class="hero-actions">
-        <a href="{{ base_url }}/soybean/" class="btn-primary">🌱 Soybean Prices</a>
-        <a href="{{ base_url }}/cotton/" class="btn-outline">🌾 Cotton Prices</a>
+        <a href="{{ base_url }}/soybean/" class="btn-primary">Soybean Prices</a>
+        <a href="{{ base_url }}/cotton/" class="btn-outline">Cotton Prices</a>
       </div>
 
       {# Client Search Box #}
@@ -56,7 +56,7 @@
     <div class="hero-visual">
       <div class="whatsapp-mockup">
         <div class="wa-header">
-          <div class="wa-avatar">🌾</div>
+          <div class="wa-avatar">G</div>
           <div class="wa-status">
             <span class="wa-name">GramIQ Mandi Prices</span>
             <span class="wa-online">online</span>
@@ -72,13 +72,13 @@
           </div>
           
           <div class="wa-bubble outgoing">
-            Soybean rates 🌱
+            Soybean rates
             <div class="wa-time">09:16 AM</div>
           </div>
 
           <div class="wa-bubble incoming">
             <div class="wa-bubble-title">Soybean Daily Report</div>
-            📅 <strong>Today's Soybean Rates</strong>
+            <strong>Today's Soybean Rates</strong>
             <br><br>
             • Maharashtra: ₹5,850 - ₹6,200/q
             <br>
@@ -117,7 +117,15 @@
       {% set is_soy = c.slug == 'soybean' %}
       <div class="commodity-card {% if is_soy %}soybean{% else %}cotton{% endif %}">
         <div class="commodity-card-icon">
-          {{ '🌱' if is_soy else '🌾' }}
+          {% if is_soy %}
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22V12M12 12c0-3.3-2.7-6-6-6M12 14c0-3.3 2.7-6 6-6"/>
+          </svg>
+          {% else %}
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 6a4 4 0 0 0 -4 4M12 6a4 4 0 0 1 4 4M12 18a4 4 0 0 0 -4-4M12 18a4 4 0 0 1 4-4"/>
+          </svg>
+          {% endif %}
         </div>
         <h3>{{ c.name }}</h3>
         <p class="commodity-card-desc">
@@ -128,7 +136,7 @@
         </div>
         {% if c.msp %}
         <div class="commodity-card-msp">
-          📋 Govt. MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal
+          Govt. MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal
         </div>
         {% endif %}
         <a href="{{ base_url }}/{{ c.slug }}/" class="btn-primary">
@@ -147,7 +155,7 @@
   <div class="container">
     <div class="section-header" style="text-align: left; display: flex; justify-content: space-between; align-items: flex-end;">
       <div>
-        <h2>📰 Latest Price Reports</h2>
+        <h2>Today's Top Reports</h2>
         <p style="margin-top: 4px;">Recently generated market bulletins and local updates</p>
       </div>
       <a href="{{ base_url }}/soybean/" class="btn-outline" style="padding: 8px 18px; font-size: 0.85rem;">All Reports →</a>
@@ -158,7 +166,7 @@
       <div class="article-card">
         <div class="article-card-header">
           <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
-            {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
+            {{ article.commodity | title }}
           </span>
           <h3 class="article-card-title">{{ article.title }}</h3>
         </div>
@@ -193,20 +201,56 @@
 
     <div class="features-grid">
       <div class="feature-item">
-        <div class="feature-icon-box">📢</div>
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </div>
         <h3>Price Advantage</h3>
         <p>Know current local mandi modal averages before committing to sales and avoid under-selling produce.</p>
       </div>
       <div class="feature-item">
-        <div class="feature-icon-box">🤝</div>
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
         <h3>Negotiate Confidently</h3>
         <p>Empower yourself with official government APMC benchmarks to negotiate best prices with commission agents and buyers.</p>
       </div>
       <div class="feature-item">
-        <div class="feature-icon-box">📈</div>
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+          </svg>
+        </div>
         <h3>Right-Time Selling</h3>
         <p>Monitor market arrivals and price changes over time to decide the most profitable week to sell.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+{# ============================================================
+   AVAILABLE IN YOUR LANGUAGE (DYNAMIC TRANSLATION)
+   ============================================================ #}
+<section class="section" style="border-top: 1px solid var(--border); background-color: var(--bg-secondary);">
+  <div class="container" style="text-align: center;">
+    <div class="section-header">
+      <h2>Available In Your Language</h2>
+      <p>Select your language below to instantly translate all market price updates</p>
+    </div>
+    
+    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; max-width: 800px; margin: 0 auto;">
+      <button class="lang-pill" onclick="translateLanguage('en')">English</button>
+      <button class="lang-pill" onclick="translateLanguage('hi')">हिंदी</button>
+      <button class="lang-pill" onclick="translateLanguage('mr')">मराठी</button>
+      <button class="lang-pill" onclick="translateLanguage('gu')">ગુજરાતી</button>
+      <button class="lang-pill" onclick="translateLanguage('pa')">ਪੰਜਾਬੀ</button>
+      <button class="lang-pill" onclick="translateLanguage('kn')">ಕನ್ನಡ</button>
+      <button class="lang-pill" onclick="translateLanguage('ta')">தமிழ்</button>
+      <button class="lang-pill" onclick="translateLanguage('te')">తెలుగు</button>
+      <button class="lang-pill" onclick="translateLanguage('bn')">বাংলা</button>
     </div>
   </div>
 </section>

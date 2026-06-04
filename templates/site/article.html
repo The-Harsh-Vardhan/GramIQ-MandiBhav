@@ -24,7 +24,7 @@
       <header class="article-detail-header">
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: var(--space-md);">
           <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
-            {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
+            {{ article.commodity | title }}
           </span>
           
           <span class="article-type-badge">{{ type_label }}</span>
@@ -45,7 +45,7 @@
             {% endif %}
           {% endif %}
 
-          <span class="article-date">📅 {{ article.date }}</span>
+          <span class="article-date">{{ article.date }}</span>
         </div>
 
         <h1 class="article-title">{{ article.title }}</h1>
@@ -53,14 +53,14 @@
 
       {# Quick Summary Callout #}
       <div class="quick-summary">
-        <div class="quick-summary-title">📋 Summary Dashboard</div>
+        <div class="quick-summary-title">Summary Dashboard</div>
         <p>{{ article.meta_description }}</p>
       </div>
 
       {# APMC Price Table #}
       {% if article.market_summary_table and article.market_summary_table | length > 0 %}
       <div class="market-table-wrapper">
-        <div class="market-table-header">📊 APMC Modal Rates — {{ article.date }}</div>
+        <div class="market-table-header">APMC Modal Rates — {{ article.date }}</div>
         <table class="market-table">
           <thead>
             <tr>
@@ -96,7 +96,7 @@
       {# FAQ Accordions #}
       {% if article.faqs and article.faqs | length > 0 %}
       <section class="faq-section" style="margin-top: var(--space-3xl);">
-        <h2 style="font-size: 1.45rem; margin-bottom: var(--space-lg);">❓ Frequently Asked Questions</h2>
+        <h2 style="font-size: 1.45rem; margin-bottom: var(--space-lg);">Frequently Asked Questions</h2>
         <div class="faq-container">
           {% for faq in article.faqs %}
           <details class="faq-details" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" id="faq-{{ loop.index }}">
@@ -122,7 +122,7 @@
       {# Language Selection Widget #}
       {% if available_langs and available_langs | length > 1 %}
       <div class="sidebar-card">
-        <div class="sidebar-card-title">🌐 Language Translation</div>
+        <div class="sidebar-card-title">Language Translation</div>
         <div class="lang-list">
           {% for lang in available_langs %}
           <a href="{{ base_url }}{{ lang.url }}"
@@ -139,7 +139,7 @@
 
       {# Report Source Details #}
       <div class="sidebar-card">
-        <div class="sidebar-card-title">📄 Information Sources</div>
+        <div class="sidebar-card-title">Information Sources</div>
         <div class="source-info">
           <p><strong>Crop Name:</strong> {{ article.commodity | title }}</p>
           <p><strong>Report Scope:</strong> {{ type_label }}</p>
@@ -158,7 +158,6 @@
 
       {# GramIQ App CTA Widget #}
       <div class="app-cta-card">
-        <span style="font-size: 2.2rem; display: block;">📱</span>
         <h3>Get Live alerts</h3>
         <p>Subscribe to our automated WhatsApp system or download the GramIQ App to get direct price alerts on your mobile phone.</p>
         <a href="https://gramiq.ai" target="_blank" rel="noopener" class="btn-primary" id="sidebar-app-download">
@@ -172,7 +171,7 @@
           All {{ article.commodity | title }} Reports
         </a>
         <a href="{{ base_url }}/" class="btn-outline" style="font-size: 0.85rem; padding: 10px 16px;">
-          🏠 Back to Homepage
+          Back to Homepage
         </a>
       </div>
 

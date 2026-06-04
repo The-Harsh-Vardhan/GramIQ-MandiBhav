@@ -16,8 +16,6 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
-from pydantic import ValidationError
-
 from config import GEMINI_API_KEY, GEMINI_MODEL, LLM_MAX_RETRIES, LLM_RETRY_DELAY_SECONDS, SEO_KEYWORDS
 from schemas import AnalyticsPayload, ArticleDraft, ArticleOutput, ScopeTarget
 from seo_assembler import assemble_article_output
@@ -236,10 +234,7 @@ def generate_articles_for_commodity(
                 drafts = _parse_batch_response(raw)
                 missing = set(scope_payloads) - set(drafts)
                 if missing:
-                    raise ValidationError.from_exception_data(
-                        "ArticleDraft",
-                        [{"loc": ("articles",), "msg": f"Missing scopes: {sorted(missing)}", "type": "value_error"}],
-                    )
+                    raise ValueError(f"Missing scopes in batch response: {sorted(missing)}")
                 generated: dict[str, ArticleOutput] = {}
                 for scope_key, draft in drafts.items():
                     payload = scope_payloads[scope_key]
@@ -250,7 +245,7 @@ def generate_articles_for_commodity(
                     len(generated), commodity, attempt
                 )
                 return generated
-            except (json.JSONDecodeError, KeyError, ValidationError) as e:
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning("Batch parse/validation failed for %s: %s", commodity, e)
                 correction_suffix = (
                     "\nReturn valid JSON only. Include one article object for every input scope_key."

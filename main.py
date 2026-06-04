@@ -234,28 +234,35 @@ def stage_generate_and_assemble(
                 commodity, date, missing_generation, scope_lookup
             )
             article_inputs.update(generated)
+            for scope_key in set(missing_generation) - set(generated):
+                logger.warning("Generation failed for: %s", scope_key)
+                counts["blocked"] += 1
 
-        for scope_key, article in article_inputs.items():
-            payload = payload_lookup[scope_key]
-            scope = scope_lookup[scope_key]
-
-            missing_langs: list[str] = []
-            translations: dict[str, object] = {}
-            if not skip_translate:
+        translation_requests: dict[str, list[str]] = {}
+        if not skip_translate:
+            for scope_key in article_inputs:
+                missing_langs: list[str] = []
                 for lang_code in config.TRANSLATION_LANGUAGES:
                     cached_tr = _find_cached_output(date, scope_key, lang_code)
                     if cached_tr:
                         logger.info("Cache hit: translation %s/%s", scope_key, lang_code)
                     else:
                         missing_langs.append(lang_code)
-
                 if missing_langs:
-                    batch_translations = translate_articles(
-                        commodity,
-                        {scope_key: article},
-                        {scope_key: missing_langs},
-                    )
-                    translations = batch_translations.get(scope_key, {})
+                    translation_requests[scope_key] = missing_langs
+
+        batched_translations = {}
+        if translation_requests:
+            batched_translations = translate_articles(
+                commodity,
+                {scope_key: article_inputs[scope_key] for scope_key in translation_requests},
+                translation_requests,
+            )
+
+        for scope_key, article in article_inputs.items():
+            payload = payload_lookup[scope_key]
+            scope = scope_lookup[scope_key]
+            translations = batched_translations.get(scope_key, {})
 
             if scope_key in cached_meta:
                 confidence = cached_meta[scope_key]["confidence_score"]
@@ -303,8 +310,8 @@ def stage_generate_and_assemble(
                 except Exception as e:
                     logger.warning("Write failed for %s/%s: %s", scope.scope_key, lang_code, e)
 
-            if missing_generation:
-                time.sleep(config.LLM_RETRY_DELAY_SECONDS)
+        if missing_generation or translation_requests:
+            time.sleep(config.LLM_RETRY_DELAY_SECONDS)
 
     return counts.get("published", 0), counts.get("review_required", 0), counts.get("blocked", 0)
 
