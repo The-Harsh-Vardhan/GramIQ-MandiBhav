@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
   <title>MandiBhav by GramIQ</title>
-  <link>/</link>
+  <link>https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/</link>
   <description>Daily soybean and cotton mandi price reports in English, Hindi, Marathi and Gujarati — powered by government data and AI.</description>
   <language>en-IN</language>
-  <lastBuildDate>Thu, 04 Jun 2026 17:43:25 +0000</lastBuildDate>
-  <atom:link href="/rss.xml" rel="self" type="application/rss+xml"/>
+  <lastBuildDate>Thu, 04 Jun 2026 17:44:26 +0000</lastBuildDate>
+  <atom:link href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/rss.xml" rel="self" type="application/rss+xml"/>
   <item>
     <title>Soybean Mandi Bhav Telangana Today: Prices Hold Firm Amidst Sowing Season, June 4, 2026</title>
-    <link>/soybean/telangana/</link>
+    <link>https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/telangana/</link>
     <description>Get the latest soybean mandi bhav Telangana today for June 4, 2026. Discover modal prices in Nizamabad and Bodhan, total arrivals, and expert insights for farmers.</description>
     <pubDate>2026-06-04</pubDate>
     <category>Soybean</category>
-    <guid isPermaLink="true">/soybean/telangana/</guid>
+    <guid isPermaLink="true">https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/telangana/</guid>
   </item>
 </channel>
 </rss>

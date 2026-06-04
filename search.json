@@ -5,7 +5,7 @@
     "language": "en",
     "type": "state_market_report",
     "date": "2026-06-04",
-    "url": "/soybean/telangana/",
+    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/telangana/",
     "state": "Telangana",
     "scope": "soybean_telangana"
   },
@@ -15,7 +15,7 @@
     "language": "gu",
     "type": "state_market_report",
     "date": "2026-06-04",
-    "url": "/gu/soybean/telangana/",
+    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/gu/soybean/telangana/",
     "state": "Telangana",
     "scope": "soybean_telangana"
   },
@@ -25,7 +25,7 @@
     "language": "hi",
     "type": "state_market_report",
     "date": "2026-06-04",
-    "url": "/hi/soybean/telangana/",
+    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/hi/soybean/telangana/",
     "state": "Telangana",
     "scope": "soybean_telangana"
   }
