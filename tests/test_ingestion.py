@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 from schemas import MarketRecord
-from ingestion import MockProvider
+from ingestion import LiveProvider, MockProvider
 
 # In-project temp dir — avoids Windows AppData\Temp permission issues
 TMP_DIR = Path(__file__).parent / "tmp"
@@ -185,3 +185,58 @@ class TestMarketRecordSchema:
         assert record.min_price == 6800.0
         assert record.max_price == 7500.0
         assert record.arrival_tonnes == 520.0
+
+
+class TestLiveProvider:
+    def test_parse_ogd_records_converts_quintals_to_tonnes(self):
+        provider = LiveProvider(api_key="test-key")
+        records = provider._parse_ogd_records(
+            [
+                {
+                    "State_Name": "Madhya Pradesh",
+                    "District_Name": "Mandsaur",
+                    "Market_Name": "Mandsaur",
+                    "Variety": "Soyabean",
+                    "Grade": "FAQ",
+                    "Min_Price": "4850",
+                    "Max_Price": "5300",
+                    "Modal_Price": "5100",
+                    "Arrivals_in_Qtl": "6200",
+                }
+            ],
+            date="2026-06-04",
+            commodity="soybean",
+        )
+
+        assert len(records) == 1
+        assert records[0].arrival_tonnes == 620.0
+        assert records[0].modal_price == 5100.0
+
+    def test_fetch_market_data_tries_alias_filters_until_data_found(self, monkeypatch):
+        provider = LiveProvider(api_key="test-key")
+        calls = []
+
+        def fake_fetch_all_pages(date: str, commodity_filter: str) -> list[dict]:
+            calls.append((date, commodity_filter))
+            if commodity_filter == "Soyabean":
+                return [{"Modal_Price": "5100", "State_Name": "MP", "Market_Name": "Mandsaur"}]
+            return []
+
+        def fake_parse(raw_records: list[dict], date: str, commodity: str) -> list[MarketRecord]:
+            return [
+                MarketRecord(
+                    state="Madhya Pradesh",
+                    market="Mandsaur",
+                    commodity=commodity,
+                    modal_price=5100.0,
+                    date=date,
+                )
+            ]
+
+        monkeypatch.setattr(provider, "_fetch_all_pages", fake_fetch_all_pages)
+        monkeypatch.setattr(provider, "_parse_ogd_records", fake_parse)
+
+        records = provider.fetch_market_data("2026-06-04", "soybean")
+
+        assert len(records) == 1
+        assert calls == [("2026-06-04", "Soyabean")]

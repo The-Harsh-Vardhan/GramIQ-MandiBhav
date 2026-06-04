@@ -8,9 +8,7 @@ Usage:
 """
 
 import csv
-import json
 import logging
-import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -20,10 +18,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 import config
 from config import (
-    PIPELINE_MODE, MOCK_DIR, OGD_API_KEY, OGD_API_BASE_URL, OGD_RESOURCE_IDS
+    PIPELINE_MODE, MOCK_DIR, OGD_API_KEY, OGD_API_BASE_URL, OGD_RESOURCE_ID,
+    OGD_API_FORMAT, OGD_PAGE_LIMIT, OGD_COMMODITY_FILTERS,
 )
 from schemas import MarketRecord
-from database import insert_market_records, query_market_data
+from database import insert_market_records
 
 logger = logging.getLogger("mandibhav.ingestion")
 
@@ -134,8 +133,14 @@ class LiveProvider(DataProvider):
         retry=retry_if_exception_type((requests.Timeout, requests.ConnectionError)),
         reraise=True,
     )
-    def _call_ogd_api(self, resource_id: str, date: str, limit: int = 500) -> list[dict]:
-        """Make a single API call to OGD and return raw records list."""
+    def _call_ogd_api_page(
+        self,
+        date: str,
+        commodity_filter: str,
+        offset: int,
+        limit: int,
+    ) -> list[dict]:
+        """Make one paginated OGD API request and return raw records."""
         # OGD date format: DD/MM/YYYY
         from datetime import date as date_cls
         d = date_cls.fromisoformat(date)
@@ -143,22 +148,48 @@ class LiveProvider(DataProvider):
 
         params = {
             "api-key": self.api_key,
-            "format": "json",
+            "format": OGD_API_FORMAT,
+            "offset": offset,
             "limit": limit,
             "filters[Arrival_Date]": ogd_date,
+            "filters[commodity]": commodity_filter,
         }
-        url = f"{OGD_API_BASE_URL}/{resource_id}"
+        url = f"{OGD_API_BASE_URL}/{OGD_RESOURCE_ID}"
 
         try:
             response = requests.get(url, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
             records = data.get("records", [])
-            logger.info("OGD API returned %d records for date=%s", len(records), date)
+            logger.info(
+                "OGD API returned %d records for date=%s commodity=%s offset=%d",
+                len(records), date, commodity_filter, offset
+            )
             return records
         except requests.HTTPError as e:
             logger.error("OGD API HTTP error: %s", e)
             raise
+
+    def _fetch_all_pages(self, date: str, commodity_filter: str) -> list[dict]:
+        """Fetch all pages for one commodity filter value."""
+        all_records: list[dict] = []
+        offset = 0
+
+        while True:
+            page = self._call_ogd_api_page(
+                date=date,
+                commodity_filter=commodity_filter,
+                offset=offset,
+                limit=OGD_PAGE_LIMIT,
+            )
+            if not page:
+                break
+            all_records.extend(page)
+            if len(page) < OGD_PAGE_LIMIT:
+                break
+            offset += OGD_PAGE_LIMIT
+
+        return all_records
 
     def _parse_ogd_records(self, raw_records: list[dict], date: str, commodity: str) -> list[MarketRecord]:
         """Parse OGD API response into validated MarketRecord objects."""
@@ -209,12 +240,28 @@ class LiveProvider(DataProvider):
         return records
 
     def fetch_market_data(self, date: str, commodity: str) -> list[MarketRecord]:
-        resource_id = OGD_RESOURCE_IDS.get(commodity.lower())
-        if not resource_id:
-            logger.error("No OGD resource ID for commodity: %s", commodity)
+        commodity_key = commodity.lower()
+        filter_values = OGD_COMMODITY_FILTERS.get(commodity_key, [commodity.title()])
+        all_raw: list[dict] = []
+
+        for commodity_filter in filter_values:
+            raw = self._fetch_all_pages(date, commodity_filter)
+            if raw:
+                logger.info(
+                    "Using OGD commodity filter '%s' for %s on %s",
+                    commodity_filter, commodity, date
+                )
+                all_raw = raw
+                break
+
+        if not all_raw:
+            logger.warning(
+                "OGD returned no records for %s on %s using filters: %s",
+                commodity, date, ", ".join(filter_values)
+            )
             return []
-        raw = self._call_ogd_api(resource_id, date)
-        return self._parse_ogd_records(raw, date, commodity)
+
+        return self._parse_ogd_records(all_raw, date, commodity)
 
     def fetch_previous_day_data(self, date: str, commodity: str) -> list[MarketRecord]:
         from datetime import date as date_cls, timedelta

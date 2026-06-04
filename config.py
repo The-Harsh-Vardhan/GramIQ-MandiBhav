@@ -84,9 +84,15 @@ GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 
 # OGD (data.gov.in) API endpoint for daily mandi prices
 OGD_API_BASE_URL: str = "https://api.data.gov.in/resource"
-OGD_RESOURCE_IDS: dict[str, str] = {
-    "soybean": "9ef84268-d588-465a-a308-a864a43d0070",
-    "cotton":  "35985678-0d79-46b5-a3be-daff7d0b5e32",
+OGD_RESOURCE_ID: str = os.environ.get(
+    "OGD_RESOURCE_ID",
+    "9ef84268-d588-465a-a308-a864a43d0070",
+)
+OGD_API_FORMAT: str = "json"
+OGD_PAGE_LIMIT: int = int(os.environ.get("OGD_PAGE_LIMIT", "1000"))
+OGD_COMMODITY_FILTERS: dict[str, list[str]] = {
+    "soybean": ["Soyabean", "Soybean"],
+    "cotton": ["Cotton"],
 }
 
 # ---------------------------------------------------------------------------
