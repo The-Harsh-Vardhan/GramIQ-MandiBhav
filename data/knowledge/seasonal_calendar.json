@@ -1,0 +1,30 @@
+{
+  "soybean": {
+    "Jan": {"phase": "lean_post_peak", "note": "Arrivals declining from peak. Stocks moving from farmer to trader hands. Prices typically firming as physical supply tightens."},
+    "Feb": {"phase": "lean", "note": "Low arrivals. Bulk of kharif crop already traded. Prices supported by export demand for soy meal."},
+    "Mar": {"phase": "lean", "note": "Minimal new crop arrivals. Market driven by trader inventory and crushing plant requirements."},
+    "Apr": {"phase": "pre_sowing_lean", "note": "Very low arrivals. Farmers retaining remaining stock or sold out. Prices typically at seasonal high ahead of new sowing."},
+    "May": {"phase": "sowing_prep", "note": "Kharif sowing preparations begin. Seed demand active. Market prices firm as old stock is nearly exhausted."},
+    "Jun": {"phase": "sowing", "note": "Kharif sowing season underway across MP, Maharashtra, and Rajasthan. Very minimal arrivals — farmers are in their fields, not selling. Prices firm to high due to limited supply."},
+    "Jul": {"phase": "active_sowing", "note": "Peak kharif sowing. Near-zero arrivals from new crop. Any market transactions are residual old stocks. Monsoon progress critically watched for yield expectations."},
+    "Aug": {"phase": "crop_growing", "note": "Soybean crop in vegetative/reproductive stage. No arrivals from kharif crop. Market activity minimal. Traders monitoring crop condition reports."},
+    "Sep": {"phase": "pre_harvest", "note": "Soybean crop approaching maturity. Slight pre-harvest arrivals possible from early-maturing varieties. Market watchers begin pricing in expected crop size."},
+    "Oct": {"phase": "harvest_start", "note": "New kharif crop harvest commences across MP and Maharashtra. Arrivals picking up rapidly. Fresh crop prices under pressure as supply returns to market."},
+    "Nov": {"phase": "peak_arrivals", "note": "Peak harvest arrival month. Maximum daily arrivals across all major soybean mandis. Prices typically at seasonal low due to peak supply. Farmers face maximum selling pressure."},
+    "Dec": {"phase": "post_peak", "note": "Arrivals beginning to decline from November peak. Prices stabilizing. Processing plants running at full capacity. Export activity picks up."}
+  },
+  "cotton": {
+    "Jan": {"phase": "active_harvest", "note": "Cotton harvest continues in Maharashtra and Telangana. High arrivals. Prices stable to slightly declining. CCI procurement may support floor prices."},
+    "Feb": {"phase": "late_harvest", "note": "Final picking of the season in most regions. Arrivals declining. Quality of late-picked cotton typically lower (shorter staple)."},
+    "Mar": {"phase": "season_end", "note": "Cotton season winding down. Mainly old stock trading. Mills building inventory for summer. Prices typically firming."},
+    "Apr": {"phase": "lean", "note": "Minimal new cotton arrivals. Market driven by ginned stock. Prices supported by mill demand ahead of summer."},
+    "May": {"phase": "sowing_prep", "note": "New kharif cotton sowing preparations in Gujarat and Maharashtra. Minimal market supply. Prices typically at seasonal high."},
+    "Jun": {"phase": "sowing", "note": "Cotton sowing actively underway in Gujarat (Saurashtra) and Vidarbha. Near-zero cotton arrivals. Any market activity is residual old stock from previous season."},
+    "Jul": {"phase": "active_growing", "note": "Cotton bolls forming. No new crop arrivals. Market prices reflect old stock scarcity. Monsoon distribution critically watched."},
+    "Aug": {"phase": "boll_development", "note": "Cotton boll development stage. Minimal market activity. Early estimates of new crop size begin circulating among traders."},
+    "Sep": {"phase": "early_picking", "note": "First picking of the new cotton crop begins in Gujarat and parts of Punjab-Haryana. Limited early arrivals with premium quality, typically commanding higher prices."},
+    "Oct": {"phase": "harvest_peak_start", "note": "Cotton harvest accelerating across all major states. Arrivals rising rapidly. New crop price discovery begins in earnest."},
+    "Nov": {"phase": "peak_arrivals", "note": "Peak cotton arrival season. Maximum supply across Gujarat, Maharashtra, and Telangana markets. Prices under pressure. CCI procurement operations influence floor prices significantly."},
+    "Dec": {"phase": "high_arrivals", "note": "Continued high arrivals, especially from Maharashtra which harvests later than Gujarat. Good quality mid-season cotton. Export parity pricing increasingly relevant."}
+  }
+}

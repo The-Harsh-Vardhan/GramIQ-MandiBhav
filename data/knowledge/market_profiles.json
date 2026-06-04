@@ -1,0 +1,82 @@
+{
+  "Mandsaur": {
+    "state": "Madhya Pradesh",
+    "district": "Mandsaur",
+    "commodities": ["soybean", "garlic", "coriander"],
+    "significance": "Largest soybean trading market in Asia and the benchmark pricing market for central India. Mandsaur APMC sets the reference price that ripples across all MP mandis. Also renowned as the world's largest garlic trading hub.",
+    "typical_daily_arrivals_tonnes": {"soybean": [400, 800]},
+    "market_type": "major_benchmark"
+  },
+  "Latur": {
+    "state": "Maharashtra",
+    "district": "Latur",
+    "commodities": ["soybean", "tur dal", "chana"],
+    "significance": "Largest soybean market in Maharashtra and one of the top 5 soybean markets in India. Latur prices are the primary benchmark for Marathwada region. Arrivals are heavily influenced by farmer selling patterns in Latur, Osmanabad, and Nanded districts.",
+    "typical_daily_arrivals_tonnes": {"soybean": [300, 600]},
+    "market_type": "major_regional"
+  },
+  "Akola": {
+    "state": "Maharashtra",
+    "district": "Akola",
+    "commodities": ["cotton", "soybean", "tur"],
+    "significance": "The commercial capital of Vidarbha and the primary cotton trading hub for Maharashtra. Akola APMC prices reflect the health of cotton cultivation across Vidarbha's 6 districts. The market is significantly impacted by CCI (Cotton Corporation of India) procurement operations.",
+    "typical_daily_arrivals_tonnes": {"cotton": [200, 500], "soybean": [200, 400]},
+    "market_type": "major_regional"
+  },
+  "Rajkot": {
+    "state": "Gujarat",
+    "district": "Rajkot",
+    "commodities": ["cotton", "groundnut", "castor"],
+    "significance": "The premier cotton trading market of Saurashtra region and a key price discovery center for long-staple cotton in India. Rajkot prices directly influence the cotton ginning and textile industries of Gujarat. Strong trader presence and excellent market infrastructure.",
+    "typical_daily_arrivals_tonnes": {"cotton": [400, 700]},
+    "market_type": "major_benchmark"
+  },
+  "Gondal": {
+    "state": "Gujarat",
+    "district": "Rajkot",
+    "commodities": ["cotton", "groundnut"],
+    "significance": "Second-largest cotton market in Saurashtra and a significant trading center for long-staple cotton. Known for competitive price discovery due to high trader participation.",
+    "typical_daily_arrivals_tonnes": {"cotton": [250, 450]},
+    "market_type": "major_regional"
+  },
+  "Yavatmal": {
+    "state": "Maharashtra",
+    "district": "Yavatmal",
+    "commodities": ["cotton", "soybean"],
+    "significance": "Central Vidarbha's largest market and a major cotton trading center. Yavatmal district is Maharashtra's largest cotton-producing district. The market often serves as an early indicator of cotton season sentiment in the Deccan plateau.",
+    "typical_daily_arrivals_tonnes": {"cotton": [250, 500]},
+    "market_type": "major_regional"
+  },
+  "Sirsa": {
+    "state": "Haryana",
+    "district": "Sirsa",
+    "commodities": ["cotton", "wheat", "paddy"],
+    "significance": "Largest cotton market in Haryana and one of the primary markets for long-staple Narma cotton grown in the Punjab-Haryana belt. Prices here reflect the premium quality commanded by northern long-staple cotton.",
+    "typical_daily_arrivals_tonnes": {"cotton": [200, 400]},
+    "market_type": "major_regional"
+  },
+  "Indore": {
+    "state": "Madhya Pradesh",
+    "district": "Indore",
+    "commodities": ["soybean", "wheat", "garlic"],
+    "significance": "The commercial hub of Madhya Pradesh and a major soybean processing center. Indore hosts several major soybean crushing units and traders, making it an important price aggregation point for central MP markets.",
+    "typical_daily_arrivals_tonnes": {"soybean": [250, 500]},
+    "market_type": "major_regional"
+  },
+  "Kota": {
+    "state": "Rajasthan",
+    "district": "Kota",
+    "commodities": ["soybean", "sorghum", "mustard"],
+    "significance": "The primary soybean market for the Hadoti region of Rajasthan (Kota-Baran-Bundi-Jhalawar belt). Prices are typically lower than MP markets due to transportation costs to crushing units in Indore and Mandsaur.",
+    "typical_daily_arrivals_tonnes": {"soybean": [100, 200]},
+    "market_type": "regional"
+  },
+  "Hanumangarh": {
+    "state": "Rajasthan",
+    "district": "Hanumangarh",
+    "commodities": ["cotton", "wheat", "mustard"],
+    "significance": "Major cotton market for northern Rajasthan, closely aligned with pricing trends from the Punjab-Haryana belt. Long-staple Narma cotton dominates arrivals.",
+    "typical_daily_arrivals_tonnes": {"cotton": [100, 200]},
+    "market_type": "regional"
+  }
+}

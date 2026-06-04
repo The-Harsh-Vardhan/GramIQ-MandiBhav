@@ -1,0 +1,49 @@
+{
+  "soybean": {
+    "english_name": "Soybean",
+    "hindi_name": "सोयाबीन",
+    "marathi_name": "सोयाबीन",
+    "gujarati_name": "સોયાબીન",
+    "local_names": ["Soya", "Bhatmas (Marathi)", "Soyabean"],
+    "key_states": ["Madhya Pradesh", "Maharashtra", "Rajasthan", "Karnataka", "Telangana"],
+    "dominant_state": "Madhya Pradesh",
+    "dominant_state_share_pct": 53,
+    "season": "kharif",
+    "sowing_months": ["June", "July"],
+    "harvest_months": ["October", "November"],
+    "peak_arrival_months": ["October", "November", "December"],
+    "lean_months": ["April", "May", "June"],
+    "typical_price_range_inr": [4000, 6000],
+    "unit": "quintal (100 kg)",
+    "description": "India's largest oilseed crop, primarily grown in central India. Madhya Pradesh accounts for over 53% of national production. Key derivatives are soybean oil and de-oiled soy meal, which is a major protein source for poultry and aquaculture feed and a significant export commodity. Soybean cultivation transformed the agricultural economy of Madhya Pradesh and Vidarbha (Maharashtra) from subsistence to commercial farming.",
+    "seo_keywords_en": ["soybean mandi bhav today", "soybean price today India", "soyabean bhav", "soya bean rate", "soybean mandi rate"],
+    "seo_keywords_hi": ["सोयाबीन का भाव", "सोयाबीन मंडी भाव", "आज का सोयाबीन भाव"],
+    "seo_keywords_mr": ["सोयाबीन बाजारभाव", "आजचा सोयाबीन भाव"],
+    "seo_keywords_gu": ["સોયાબીન ભાવ", "આજનો સોયાબીન ભાવ"]
+  },
+  "cotton": {
+    "english_name": "Cotton",
+    "hindi_name": "कपास",
+    "marathi_name": "कापूस",
+    "gujarati_name": "કપાસ",
+    "local_names": ["Kapas (raw cotton with seed)", "Kapas (Marathi/Gujarati)", "Narma (Haryana/Punjab)"],
+    "key_states": ["Gujarat", "Maharashtra", "Telangana", "Haryana", "Punjab", "Rajasthan"],
+    "dominant_state": "Gujarat",
+    "dominant_state_share_pct": 28,
+    "season": "kharif",
+    "sowing_months": ["May", "June", "July"],
+    "harvest_months": ["October", "November", "December", "January"],
+    "peak_arrival_months": ["November", "December", "January"],
+    "lean_months": ["May", "June", "July"],
+    "typical_price_range_inr": {
+      "medium_staple": [5800, 7500],
+      "long_staple": [6200, 8000]
+    },
+    "unit": "quintal (100 kg)",
+    "description": "India is the world's largest producer of cotton, with cotton cultivation supporting approximately 60 million farmers and workers in the value chain. Raw cotton (kapas) is sold in mandis as seed-cotton, which is then ginned to separate lint (cotton fibre) and cottonseed. Gujarat dominates long-staple cotton production, while Vidarbha (Maharashtra) is the heartland of medium-staple cotton. Prices are significantly influenced by international cotton futures (ICE) and CCI (Cotton Corporation of India) procurement.",
+    "seo_keywords_en": ["cotton mandi bhav today", "kapas bhav today", "cotton price India today", "kapas rate", "cotton mandi rate"],
+    "seo_keywords_hi": ["कपास का भाव", "कपास मंडी भाव", "आज का कपास भाव", "कपास रेट"],
+    "seo_keywords_mr": ["कापूस बाजारभाव", "आजचा कापूस भाव", "कापूस दर"],
+    "seo_keywords_gu": ["કપાસ ભાવ", "આજનો કપાસ ભાવ", "કપાસ મંડી ભાવ"]
+  }
+}

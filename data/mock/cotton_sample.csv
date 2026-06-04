@@ -1,0 +1,25 @@
+state,district,market,commodity,variety,grade,min_price,max_price,modal_price,arrival_tonnes,date
+Gujarat,Rajkot,Rajkot,Cotton,Long Staple,FAQ,6800,7500,7200,520,2026-06-04
+Gujarat,Rajkot,Gondal,Cotton,Long Staple,FAQ,6750,7450,7150,310,2026-06-04
+Gujarat,Surendranagar,Surendranagar,Cotton,Long Staple,FAQ,6700,7400,7100,420,2026-06-04
+Gujarat,Surendranagar,Wadhwan,Cotton,Long Staple,FAQ,6650,7350,7050,185,2026-06-04
+Gujarat,Amreli,Amreli,Cotton,Long Staple,FAQ,6720,7420,7120,280,2026-06-04
+Gujarat,Bhavnagar,Bhavnagar,Cotton,Long Staple,FAQ,6680,7380,7080,195,2026-06-04
+Gujarat,Junagadh,Junagadh,Cotton,Long Staple,FAQ,6650,7350,7050,145,2026-06-04
+Maharashtra,Akola,Akola,Cotton,Medium Staple,FAQ,6400,7100,6750,380,2026-06-04
+Maharashtra,Akola,Washim,Cotton,Medium Staple,FAQ,6350,7050,6700,215,2026-06-04
+Maharashtra,Yavatmal,Yavatmal,Cotton,Medium Staple,FAQ,6320,7020,6680,320,2026-06-04
+Maharashtra,Yavatmal,Wani,Cotton,Medium Staple,FAQ,6280,6980,6630,145,2026-06-04
+Maharashtra,Amravati,Amravati,Cotton,Medium Staple,FAQ,6350,7050,6700,290,2026-06-04
+Maharashtra,Buldhana,Buldhana,Cotton,Medium Staple,FAQ,6300,7000,6650,175,2026-06-04
+Telangana,Adilabad,Adilabad,Cotton,Medium Staple,FAQ,6250,6950,6600,210,2026-06-04
+Telangana,Nizamabad,Nizamabad,Cotton,Medium Staple,FAQ,6200,6900,6550,155,2026-06-04
+Telangana,Khammam,Khammam,Cotton,Medium Staple,FAQ,6180,6880,6530,130,2026-06-04
+Punjab,Abohar,Abohar,Cotton,Long Staple,FAQ,7000,7600,7280,240,2026-06-04
+Punjab,Fazilka,Fazilka,Cotton,Long Staple,FAQ,6950,7550,7230,185,2026-06-04
+Punjab,Muktsar,Muktsar,Cotton,Long Staple,FAQ,6900,7500,7180,150,2026-06-04
+Haryana,Sirsa,Sirsa,Cotton,Long Staple,FAQ,7050,7650,7320,270,2026-06-04
+Haryana,Fatehabad,Fatehabad,Cotton,Long Staple,FAQ,6980,7580,7260,195,2026-06-04
+Haryana,Hisar,Hisar,Cotton,Long Staple,FAQ,6950,7550,7230,175,2026-06-04
+Rajasthan,Hanumangarh,Hanumangarh,Cotton,Long Staple,FAQ,7100,7700,7380,160,2026-06-04
+Rajasthan,Sriganganagar,Sriganganagar,Cotton,Long Staple,FAQ,7050,7650,7320,140,2026-06-04

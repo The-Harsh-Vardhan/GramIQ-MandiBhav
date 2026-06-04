@@ -1,0 +1,26 @@
+state,district,market,commodity,variety,grade,min_price,max_price,modal_price,arrival_tonnes,date
+Madhya Pradesh,Mandsaur,Mandsaur,Soybean,Yellow,FAQ,4850,5300,5100,620,2026-06-04
+Madhya Pradesh,Mandsaur,Sitamau,Soybean,Yellow,FAQ,4750,5150,4980,145,2026-06-04
+Madhya Pradesh,Mandsaur,Garoth,Soybean,Yellow,FAQ,4700,5100,4900,98,2026-06-04
+Madhya Pradesh,Indore,Indore,Soybean,Yellow,FAQ,4780,5200,5020,310,2026-06-04
+Madhya Pradesh,Indore,Dewas,Soybean,Yellow,FAQ,4720,5100,4950,185,2026-06-04
+Madhya Pradesh,Ujjain,Ujjain,Soybean,Yellow,FAQ,4680,5080,4880,220,2026-06-04
+Madhya Pradesh,Vidisha,Vidisha,Soybean,Yellow,FAQ,4650,5050,4850,175,2026-06-04
+Madhya Pradesh,Khandwa,Khandwa,Soybean,Yellow,FAQ,4720,5120,4960,260,2026-06-04
+Madhya Pradesh,Hoshangabad,Hoshangabad,Soybean,Yellow,FAQ,4700,5080,4920,190,2026-06-04
+Maharashtra,Latur,Latur,Soybean,Yellow,FAQ,4700,5150,4950,380,2026-06-04
+Maharashtra,Latur,Ausa,Soybean,Yellow,FAQ,4620,5050,4870,120,2026-06-04
+Maharashtra,Akola,Akola,Soybean,Yellow,FAQ,4650,5100,4900,275,2026-06-04
+Maharashtra,Akola,Washim,Soybean,Yellow,FAQ,4600,5000,4820,165,2026-06-04
+Maharashtra,Osmanabad,Osmanabad,Soybean,Yellow,FAQ,4580,4980,4800,140,2026-06-04
+Maharashtra,Nagpur,Nagpur,Soybean,Yellow,FAQ,4640,5080,4880,195,2026-06-04
+Maharashtra,Nanded,Nanded,Soybean,Yellow,FAQ,4560,4960,4760,110,2026-06-04
+Rajasthan,Kota,Kota,Soybean,Yellow,FAQ,4400,4850,4620,155,2026-06-04
+Rajasthan,Kota,Baran,Soybean,Yellow,FAQ,4350,4800,4570,85,2026-06-04
+Rajasthan,Bundi,Bundi,Soybean,Yellow,FAQ,4380,4830,4590,70,2026-06-04
+Rajasthan,Jhalawar,Jhalawar,Soybean,Yellow,FAQ,4320,4770,4540,65,2026-06-04
+Karnataka,Gulbarga,Gulbarga,Soybean,Yellow,FAQ,4480,4930,4700,130,2026-06-04
+Karnataka,Bidar,Bidar,Soybean,Yellow,FAQ,4420,4870,4640,90,2026-06-04
+Karnataka,Raichur,Raichur,Soybean,Yellow,FAQ,4400,4850,4620,75,2026-06-04
+Telangana,Nizamabad,Nizamabad,Soybean,Yellow,FAQ,4500,4950,4720,100,2026-06-04
+Telangana,Nizamabad,Bodhan,Soybean,Yellow,FAQ,4450,4900,4670,60,2026-06-04

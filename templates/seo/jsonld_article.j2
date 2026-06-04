@@ -1,0 +1,27 @@
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "{{ title }}",
+  "description": "{{ meta_description }}",
+  "datePublished": "{{ date_iso }}",
+  "dateModified": "{{ date_iso }}",
+  "author": {
+    "@type": "Organization",
+    "name": "GramIQ",
+    "url": "https://gramiq.com"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GramIQ",
+    "url": "https://gramiq.com",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://gramiq.com/assets/logo.png"
+    }
+  },
+  "inLanguage": "{{ language_code }}",
+  "keywords": "{{ keywords_csv }}",
+  "articleSection": "Mandi Bhav",
+  "dateline": "{{ dateline }}, India",
+  "articleBody": {{ article_body_plain | tojson }}
+}

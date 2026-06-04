@@ -1,0 +1,20 @@
+[
+  {
+    "slug": "soybean",
+    "display_name_en": "Soybean",
+    "display_name_hi": "सोयाबीन",
+    "display_name_mr": "सोयाबीन",
+    "display_name_gu": "સોયાબીન",
+    "agmarknet_code": "Soyabean",
+    "ogd_resource_id": "9ef84268-d588-465a-a308-a864a43d0070"
+  },
+  {
+    "slug": "cotton",
+    "display_name_en": "Cotton",
+    "display_name_hi": "कपास",
+    "display_name_mr": "कापूस",
+    "display_name_gu": "કપાસ",
+    "agmarknet_code": "Cotton(Lint)",
+    "ogd_resource_id": "35985678-0d79-46b5-a3be-daff7d0b5e32"
+  }
+]

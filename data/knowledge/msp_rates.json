@@ -1,0 +1,25 @@
+{
+  "soybean": {
+    "2025-26": 4892,
+    "2024-25": 4600,
+    "2023-24": 4300,
+    "unit": "INR/quintal",
+    "note": "Minimum Support Price (MSP) declared by Cabinet Committee on Economic Affairs (CCEA), Government of India."
+  },
+  "cotton": {
+    "2025-26": {
+      "medium_staple": 7121,
+      "long_staple": 7521
+    },
+    "2024-25": {
+      "medium_staple": 6620,
+      "long_staple": 7020
+    },
+    "2023-24": {
+      "medium_staple": 6080,
+      "long_staple": 6380
+    },
+    "unit": "INR/quintal",
+    "note": "MSP for cotton is differentiated by staple length. Medium Staple: fibre length 24.5-25.5mm. Long Staple: fibre length 29.5-30mm and above."
+  }
+}

@@ -1,0 +1,18 @@
+Translate the following agricultural market article from English to {target_language}.
+
+CRITICAL RULES FOR TRANSLATION:
+1. Preserve ALL HTML tags exactly as they appear (<h2>, <h3>, <p>, <table>, <tr>, <td>, <strong>, <em>, <ol>, <li>). Do NOT translate or modify any HTML tags.
+2. Translate ONLY the visible text content between HTML tags.
+3. Do NOT translate these domain-specific terms — keep them in their original form: MSP, APMC, FAQ, quintal, mandi, CCI, kharif, rabi, GramIQ.
+4. Keep ALL numeric values unchanged (prices, percentages, weights, dates).
+5. Keep market names, city names, and state names as-is (e.g., "Mandsaur", "Latur", "Madhya Pradesh").
+6. Keep the commodity names in their regional language equivalent: {commodity_translations}.
+7. The translation must sound natural and fluent to a farmer from {target_region} — not like a literal translation.
+8. Maintain the same structural flow and tone as the original.
+9. Output ONLY the translated HTML body content. No explanatory text.
+
+TARGET LANGUAGE: {target_language}
+TARGET SCRIPT: {target_script}
+
+ENGLISH ARTICLE TO TRANSLATE:
+{article_body}
