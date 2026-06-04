@@ -1,0 +1,164 @@
+name: Deploy to GitHub Pages
+
+on:
+  # Run daily at 06:30 IST (01:00 UTC) — after OGD API publishes morning data
+  schedule:
+    - cron: '0 1 * * *'
+
+  # Also run on every push to main (for manual triggers)
+  push:
+    branches: [ main, master ]
+
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Target date (YYYY-MM-DD). Leave empty for today.'
+        required: false
+        default: ''
+      skip_generation:
+        description: 'Skip main.py and only rebuild site from existing JSON'
+        required: false
+        type: boolean
+        default: false
+
+# Only one deployment at a time
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================
+  # Job 1: Generate articles (main.py)
+  # ============================================================
+  generate:
+    name: Generate Articles
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_generation }}
+    outputs:
+      date: ${{ steps.set-date.outputs.date }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set target date
+        id: set-date
+        run: |
+          if [ -n "${{ inputs.date }}" ]; then
+            echo "date=${{ inputs.date }}" >> $GITHUB_OUTPUT
+          else
+            echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline (generate articles)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OGD_API_KEY:    ${{ secrets.OGD_API_KEY }}
+          PIPELINE_MODE:  ${{ secrets.OGD_API_KEY && 'live' || 'dev' }}
+          SITE_BASE_URL:  ${{ secrets.SITE_BASE_URL || '' }}
+        run: |
+          python main.py --date ${{ steps.set-date.outputs.date }} \
+                         --skip-evaluate \
+                         --verbose
+        continue-on-error: true   # Site build continues even if some articles fail
+
+      - name: Upload generated articles
+        uses: actions/upload-artifact@v4
+        with:
+          name: articles-${{ steps.set-date.outputs.date }}
+          path: output/
+          retention-days: 7
+
+  # ============================================================
+  # Job 2: Build static site (build_site.py)
+  # ============================================================
+  build-site:
+    name: Build Static Site
+    runs-on: ubuntu-latest
+    needs: generate
+    if: always()   # Run even if generate was skipped or partially failed
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download generated articles
+        uses: actions/download-artifact@v4
+        with:
+          name: articles-${{ needs.generate.outputs.date || steps.today.outputs.date }}
+          path: output/
+        continue-on-error: true
+
+      - name: Get today's date (fallback)
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Build static site
+        env:
+          SITE_BASE_URL: ${{ secrets.SITE_BASE_URL || '' }}
+        run: |
+          python build_site.py \
+            --date "${{ needs.generate.outputs.date || steps.today.outputs.date }}" \
+            --base-url "${{ secrets.SITE_BASE_URL || '' }}" \
+            --clean \
+            --verbose
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/
+          retention-days: 1
+
+  # ============================================================
+  # Job 3: Deploy to GitHub Pages
+  # ============================================================
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build-site
+
+    permissions:
+      contents: write   # Required to push to gh-pages branch
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site/
+
+      - name: Add .nojekyll
+        run: touch site/.nojekyll
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token:     ${{ secrets.GITHUB_TOKEN }}
+          publish_dir:      ./site
+          publish_branch:   gh-pages
+          commit_message:   "deploy: update site for ${{ needs.generate.outputs.date || 'latest' }} [skip ci]"
+          user_name:        "github-actions[bot]"
+          user_email:       "github-actions[bot]@users.noreply.github.com"

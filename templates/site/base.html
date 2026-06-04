@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang | default('en') }}" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-base-url" content="{{ base_url }}">
+
+  {# ---- Primary SEO ---- #}
+  <title>{{ page_title }}</title>
+  <meta name="description" content="{{ meta_description }}">
+  <meta name="keywords" content="{{ keywords | join(', ') if keywords else 'mandi bhav, agricultural prices, crop rates India' }}">
+  <meta name="author" content="GramIQ">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="{{ current_lang | default('en') }}">
+
+  {# ---- Canonical & hreflang ---- #}
+  {% if canonical_url %}
+  <link rel="canonical" href="{{ canonical_url }}">
+  {% endif %}
+  {% for alt in hreflang_links | default([]) %}
+  <link rel="alternate" hreflang="{{ alt.lang }}" href="{{ alt.url }}">
+  {% endfor %}
+  <link rel="alternate" hreflang="x-default" href="{{ base_url }}/">
+
+  {# ---- Open Graph ---- #}
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="{{ og_title | default(page_title) }}">
+  <meta property="og:description" content="{{ og_description | default(meta_description) }}">
+  <meta property="og:url" content="{{ canonical_url | default(base_url + '/') }}">
+  <meta property="og:site_name" content="MandiBhav by GramIQ">
+  <meta property="og:locale" content="{{ og_locale | default('en_IN') }}">
+  {% if og_image_url %}
+  <meta property="og:image" content="{{ og_image_url }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  {% endif %}
+
+  {# ---- Twitter Card ---- #}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ og_title | default(page_title) }}">
+  <meta name="twitter:description" content="{{ og_description | default(meta_description) }}">
+
+  {# ---- RSS Feed ---- #}
+  <link rel="alternate" type="application/rss+xml" title="MandiBhav by GramIQ — Latest Prices"
+        href="{{ base_url }}/rss.xml">
+
+  {# ---- JSON-LD ---- #}
+  {% for ld in json_ld_blocks | default([]) %}
+  <script type="application/ld+json">{{ ld | tojson(indent=2) }}</script>
+  {% endfor %}
+
+  {# ---- Organization JSON-LD (sitewide) ---- #}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GramIQ",
+    "url": "{{ base_url }}/",
+    "description": "AI-powered agricultural market intelligence for Indian farmers"
+  }
+  </script>
+
+  {# ---- Breadcrumb JSON-LD ---- #}
+  {% if breadcrumbs %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {% for crumb in breadcrumbs %}
+      {
+        "@type": "ListItem",
+        "position": {{ loop.index }},
+        "name": "{{ crumb.label }}",
+        "item": "{{ base_url }}{{ crumb.url }}"
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+  </script>
+  {% endif %}
+
+  {# ---- Styles ---- #}
+  <link rel="stylesheet" href="{{ base_url }}/assets/style.css">
+</head>
+<body>
+
+{# ============================================================
+   NAVBAR
+   ============================================================ #}
+<header class="navbar">
+  <div class="container">
+    <a href="{{ base_url }}/" class="navbar-brand">
+      <div class="brand-logo">🌾</div>
+      <div>
+        MandiBhav
+        <div class="brand-sub">by GramIQ</div>
+      </div>
+    </a>
+
+    <nav aria-label="Main navigation">
+      <ul class="navbar-nav">
+        <li><a href="{{ base_url }}/" {% if active_nav == 'home' %}class="active"{% endif %}>Home</a></li>
+        <li><a href="{{ base_url }}/soybean/" {% if active_nav == 'soybean' %}class="active"{% endif %}>Soybean</a></li>
+        <li><a href="{{ base_url }}/cotton/" {% if active_nav == 'cotton' %}class="active"{% endif %}>Cotton</a></li>
+        <li><a href="{{ base_url }}/rss.xml">RSS</a></li>
+      </ul>
+    </nav>
+
+    <div class="lang-switcher" aria-label="Language switcher">
+      {% set lang_map = [('en','EN'),('hi','हि'),('mr','म'),('gu','ગુ')] %}
+      {% for code, label in lang_map %}
+        {% if lang_urls and lang_urls[code] is defined %}
+        <a href="{{ lang_urls[code] }}" class="lang-pill {% if current_lang == code %}current{% endif %}"
+           aria-label="{{ code }}">{{ label }}</a>
+        {% else %}
+        <span class="lang-pill {% if current_lang == code %}current{% endif %}">{{ label }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</header>
+
+{# ============================================================
+   MAIN CONTENT
+   ============================================================ #}
+<main id="main-content">
+  {% block content %}{% endblock %}
+</main>
+
+{# ============================================================
+   FOOTER
+   ============================================================ #}
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-brand-name">🌾 MandiBhav by GramIQ</div>
+        <p class="footer-brand-desc">
+          Daily mandi price reports in 4 languages,<br>
+          powered by government data and AI.
+        </p>
+      </div>
+      <div>
+        <div class="footer-heading">Commodities</div>
+        <div class="footer-links">
+          <a href="{{ base_url }}/soybean/">Soybean Rates</a>
+          <a href="{{ base_url }}/cotton/">Cotton Rates</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-heading">Data Source</div>
+        <div class="footer-links">
+          <a href="https://data.gov.in" target="_blank" rel="noopener">data.gov.in (OGD)</a>
+          <a href="{{ base_url }}/sitemap.xml">Sitemap</a>
+          <a href="{{ base_url }}/rss.xml">RSS Feed</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 GramIQ. Prices are indicative — verify before trading.</span>
+      <span>Generated {{ generated_at }}</span>
+    </div>
+  </div>
+</footer>
+
+<script src="{{ base_url }}/assets/search.js" defer></script>
+</body>
+</html>

@@ -56,6 +56,23 @@ PROMPTS_DIR = TEMPLATES_DIR / "prompts"
 SEO_TEMPLATES_DIR = TEMPLATES_DIR / "seo"
 OUTPUT_DIR = ROOT_DIR / "output"
 DB_PATH = ROOT_DIR / "mandibhav.db"
+SITE_DIR = ROOT_DIR / "site"
+SITE_TEMPLATES_DIR = TEMPLATES_DIR / "site"
+
+# ---------------------------------------------------------------------------
+# Static site generation settings
+# ---------------------------------------------------------------------------
+# Set SITE_BASE_URL in .env for custom domains or subdirectory deployments.
+# Examples:
+#   SITE_BASE_URL=https://the-harsh-vardhan.github.io/GramIQ-MandiBhav
+#   SITE_BASE_URL=https://mandibhav.gramiq.com
+# Leave empty for relative URLs (works for local file:// browsing too).
+SITE_BASE_URL: str = os.environ.get("SITE_BASE_URL", "").rstrip("/")
+SITE_TITLE: str = "MandiBhav by GramIQ"
+SITE_DESCRIPTION: str = (
+    "Daily soybean and cotton mandi price reports in English, Hindi, "
+    "Marathi and Gujarati — powered by government data and AI."
+)
 
 
 # ---------------------------------------------------------------------------
