@@ -117,14 +117,20 @@ class LiveProvider(DataProvider):
     Requires OGD_API_KEY to be set in environment.
     """
 
+    # Placeholder strings that indicate the key was never set
+    _PLACEHOLDER_KEYS = {"your_ogd_api_key_here", "", "none", "null"}
+
     def __init__(self, api_key: str = OGD_API_KEY):
         self.api_key = api_key
-        if not self.api_key:
-            logger.warning("OGD_API_KEY not set. LiveProvider may fail.")
+        if not self.api_key or self.api_key.lower() in self._PLACEHOLDER_KEYS:
+            raise ValueError(
+                "OGD_API_KEY is not configured. "
+                "Set a valid key in .env or switch to PIPELINE_MODE=dev."
+            )
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=16),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=2, min=3, max=12),
         retry=retry_if_exception_type((requests.Timeout, requests.ConnectionError)),
         reraise=True,
     )
@@ -221,13 +227,22 @@ class LiveProvider(DataProvider):
 # ---------------------------------------------------------------------------
 
 def get_provider() -> DataProvider:
-    """Return the appropriate DataProvider based on PIPELINE_MODE config."""
+    """
+    Return the appropriate DataProvider based on PIPELINE_MODE.
+    If PIPELINE_MODE=live but OGD_API_KEY is missing/invalid,
+    logs a clear warning and falls back to MockProvider automatically.
+    """
     if PIPELINE_MODE == "live":
-        logger.info("Using LiveProvider (OGD API)")
-        return LiveProvider()
-    else:
-        logger.info("Using MockProvider (CSV fixtures in %s)", MOCK_DIR)
-        return MockProvider()
+        try:
+            provider = LiveProvider()
+            logger.info("Using LiveProvider (OGD API)")
+            return provider
+        except ValueError as e:
+            logger.warning(
+                "LiveProvider unavailable: %s — falling back to MockProvider.", e
+            )
+    logger.info("Using MockProvider (CSV fixtures in %s)", MOCK_DIR)
+    return MockProvider()
 
 
 # ---------------------------------------------------------------------------
@@ -237,25 +252,50 @@ def get_provider() -> DataProvider:
 def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[MarketRecord]:
     """
     Full ingestion flow for one commodity:
-    1. Fetch from provider
+    1. Fetch from provider; if live fetch fails, automatically retry with MockProvider
     2. Store in SQLite (deduplication via ON CONFLICT IGNORE)
     3. Return records for downstream analytics
     """
     logger.info("Ingesting %s data for %s ...", commodity, date)
 
-    records = provider.fetch_market_data(date, commodity)
+    records: list[MarketRecord] = []
+    actual_provider = provider
+
+    try:
+        records = provider.fetch_market_data(date, commodity)
+    except Exception as e:
+        logger.error(
+            "Provider %s failed for %s: %s",
+            type(provider).__name__, commodity, e
+        )
+        if not isinstance(provider, MockProvider):
+            logger.warning(
+                "Falling back to MockProvider for %s (live data unavailable).", commodity
+            )
+            actual_provider = MockProvider()
+            try:
+                records = actual_provider.fetch_market_data(date, commodity)
+            except Exception as fallback_err:
+                logger.error("MockProvider also failed for %s: %s", commodity, fallback_err)
+                return []
+
     if not records:
         logger.warning("No records fetched for %s on %s", commodity, date)
         return []
 
-    source = "mock" if isinstance(provider, MockProvider) else "ogd_api"
+    source = "mock" if isinstance(actual_provider, MockProvider) else "ogd_api"
     inserted = insert_market_records(records, source=source)
     logger.info("Stored %d new records for %s (%s)", inserted, commodity, date)
 
     # Also ingest previous day data for delta computation
-    prev_records = provider.fetch_previous_day_data(date, commodity)
-    if prev_records:
-        insert_market_records(prev_records, source=source)
-        logger.debug("Stored %d previous-day records for %s", len(prev_records), commodity)
+    try:
+        prev_records = actual_provider.fetch_previous_day_data(date, commodity)
+        if prev_records:
+            insert_market_records(prev_records, source=source)
+            logger.debug(
+                "Stored %d previous-day records for %s", len(prev_records), commodity
+            )
+    except Exception as e:
+        logger.warning("Previous-day ingestion failed for %s (non-fatal): %s", commodity, e)
 
     return records

@@ -13,6 +13,7 @@ Output is validated with Pydantic. Retries with error-correction on failure.
 
 import json
 import logging
+import re
 import time
 from typing import Optional
 
@@ -268,7 +269,17 @@ def _call_gemini_api(system_prompt: str, user_message: str) -> Optional[str]:
         )
         return response.text
     except Exception as e:
-        logger.error("Gemini API call failed: %s", e)
+        err_str = str(e)
+        # Parse retryDelay from API error message if present (e.g. '27s')
+        if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
+            match = re.search(r"retry.*?(\d+)s", err_str, re.IGNORECASE)
+            wait = int(match.group(1)) + 2 if match else 30
+            logger.warning(
+                "Rate limit hit (429 RESOURCE_EXHAUSTED). Waiting %ds before retry ...", wait
+            )
+            time.sleep(wait)
+        else:
+            logger.error("Gemini API call failed: %s", e)
         return None
 
 

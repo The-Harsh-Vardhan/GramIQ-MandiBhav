@@ -12,6 +12,7 @@ Prints a formatted quality report to stdout and optionally writes it to a JSON f
 import json
 import logging
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -308,7 +309,15 @@ def print_report(report: EvaluationReport, pipeline_time_seconds: float = 0.0) -
     lines.append("═" * 55)
     lines.append("")
 
-    print("\n".join(lines))
+    output = "\n".join(lines)
+    # Write with explicit UTF-8 to avoid Windows cp1252 UnicodeEncodeError
+    # (box-drawing chars and emoji require UTF-8)
+    try:
+        sys.stdout.buffer.write((output + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except AttributeError:
+        # Fallback for environments without buffer attribute
+        print(output)
 
 
 def save_report_json(report: EvaluationReport, output_dir: Path = OUTPUT_DIR) -> Path:

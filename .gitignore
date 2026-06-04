@@ -1,0 +1,86 @@
+# =============================================================================
+# MandiBhav by GramIQ — .gitignore
+# =============================================================================
+
+# --- Secrets & Environment ---
+.env
+*.env
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+nosetests.xml
+tests/tmp/
+
+# --- Type checkers ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Project-specific generated files ---
+# SQLite database (generated at runtime)
+mandibhav.db
+mandibhav.db-shm
+mandibhav.db-wal
+
+# Generated article output (runtime artifacts)
+output/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# --- Logs ---
+*.log
+logs/
