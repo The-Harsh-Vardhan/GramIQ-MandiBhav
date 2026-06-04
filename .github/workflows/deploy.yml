@@ -65,7 +65,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OGD_API_KEY:    ${{ secrets.OGD_API_KEY }}
           PIPELINE_MODE:  ${{ secrets.OGD_API_KEY && 'live' || 'dev' }}
-          SITE_BASE_URL:  ${{ secrets.SITE_BASE_URL || '' }}
+          SITE_BASE_URL:  ${{ secrets.SITE_BASE_URL || 'https://the-harsh-vardhan.github.io/GramIQ-MandiBhav' }}
         run: |
           python main.py --date ${{ steps.set-date.outputs.date }} \
                          --skip-evaluate \
@@ -114,11 +114,11 @@ jobs:
 
       - name: Build static site
         env:
-          SITE_BASE_URL: ${{ secrets.SITE_BASE_URL || '' }}
+          SITE_BASE_URL: ${{ secrets.SITE_BASE_URL || 'https://the-harsh-vardhan.github.io/GramIQ-MandiBhav' }}
         run: |
           python build_site.py \
             --date "${{ needs.generate.outputs.date || steps.today.outputs.date }}" \
-            --base-url "${{ secrets.SITE_BASE_URL || '' }}" \
+            --base-url "${{ secrets.SITE_BASE_URL || 'https://the-harsh-vardhan.github.io/GramIQ-MandiBhav' }}" \
             --clean \
             --verbose
 
