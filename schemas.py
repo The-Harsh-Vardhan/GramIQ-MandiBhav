@@ -22,8 +22,8 @@ class MarketRecord(BaseModel):
     commodity: str
     variety: str = ""
     grade: str = ""
-    min_price: float = Field(ge=0)
-    max_price: float = Field(ge=0)
+    min_price: float = Field(ge=0, default=0.0)
+    max_price: float = Field(ge=0, default=0.0)
     modal_price: float = Field(ge=0)
     arrival_tonnes: float = Field(ge=0, default=0.0)
     date: str  # ISO format: YYYY-MM-DD
