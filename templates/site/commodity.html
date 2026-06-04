@@ -1,61 +1,75 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container" style="padding-top:var(--space-xl)">
 
-  {# Breadcrumb #}
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href="{{ base_url }}/">Home</a>
-    <span class="breadcrumb-sep">›</span>
-    <span class="breadcrumb-current">{{ commodity.name }}</span>
-  </nav>
+{# ---- Page Header ---- #}
+<div style="background:var(--bg-white);border-bottom:1px solid var(--border);padding:var(--space-xl) 0">
+  <div class="container">
 
-  {# Header #}
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-xl);margin-bottom:var(--space-xl);flex-wrap:wrap">
-    <div>
-      <div class="article-tags" style="margin-bottom:var(--space-sm)">
-        <span class="card-tag {{ 'tag-soybean' if commodity.slug == 'soybean' else 'tag-cotton' }}">
-          {{ commodity.name | upper }}
-        </span>
-        <span class="article-type-badge">{{ total_articles }} reports</span>
-        {% if current_lang != 'en' %}
-        <span class="article-type-badge">{{ lang_label }}</span>
-        {% endif %}
+    {# Breadcrumb #}
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="{{ base_url }}/">🏠 Home</a>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">{{ commodity.name }}</span>
+    </nav>
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-xl);flex-wrap:wrap">
+      <div>
+        <div class="article-tags" style="margin-bottom:var(--space-sm)">
+          <span class="card-tag {{ 'tag-soybean' if commodity.slug == 'soybean' else 'tag-cotton' }}">
+            {{ '🌱' if commodity.slug == 'soybean' else '🌾' }} {{ commodity.name }}
+          </span>
+          <span class="article-type-badge">{{ total_articles }} reports today</span>
+          {% if current_lang != 'en' %}
+          <span class="article-type-badge">{{ lang_label }}</span>
+          {% endif %}
+        </div>
+        <h1 style="font-size:clamp(1.6rem,3vw,2.4rem);font-weight:800;color:var(--text-primary);margin-bottom:var(--space-sm);letter-spacing:-.02em">
+          {{ commodity.name }} Mandi Bhav — {{ latest_date }}
+        </h1>
+        <p style="color:var(--text-muted);max-width:640px;line-height:1.7">
+          {{ commodity.description }}
+        </p>
       </div>
-      <h1 style="font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;color:var(--text-primary);margin-bottom:var(--space-sm)">
-        {{ commodity.name }} Mandi Bhav — {{ latest_date }}
-      </h1>
-      <p style="color:var(--text-secondary);max-width:640px">
-        {{ commodity.description }}
-      </p>
+
+      {% if msp_info %}
+      <div class="msp-badge" style="flex-shrink:0;flex-direction:column;align-items:flex-start">
+        <div class="msp-label">📋 Govt. MSP {{ msp_info.year }}</div>
+        <div class="msp-value">₹{{ "{:,.0f}".format(msp_info.value) }}</div>
+        <div style="font-size:.78rem;color:var(--green-600);font-weight:600">per quintal</div>
+      </div>
+      {% endif %}
     </div>
 
-    {% if msp_info %}
-    <div class="sidebar-card" style="min-width:200px;flex-shrink:0">
-      <div class="sidebar-title">Government MSP</div>
-      <div style="font-size:1.6rem;font-weight:700;color:var(--green-400)">
-        ₹{{ "{:,.0f}".format(msp_info.value) }}
-      </div>
-      <div style="font-size:.8rem;color:var(--text-muted)">/quintal · {{ msp_info.year }}</div>
+    {# Language Switcher #}
+    {% if lang_variants %}
+    <div style="margin-top:var(--space-lg);display:flex;align-items:center;gap:var(--space-xs);flex-wrap:wrap">
+      <span style="font-size:.8rem;font-weight:600;color:var(--text-muted);margin-right:var(--space-xs)">🌐 Read in:</span>
+      {% for v in lang_variants %}
+      <a href="{{ base_url }}{{ v.url }}"
+         class="lang-pill {% if v.code == current_lang %}current{% endif %}"
+         id="lang-switch-{{ v.code }}">{{ v.label }}</a>
+      {% endfor %}
     </div>
     {% endif %}
-  </div>
 
-  {# Article groups by type #}
+  </div>
+</div>
+
+{# ---- Article Groups ---- #}
+<div class="container" style="padding-top:var(--space-xl);padding-bottom:var(--space-3xl)">
   {% for group in article_groups %}
   <section style="margin-bottom:var(--space-2xl)">
-    <h2 style="font-size:1rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-               color:var(--text-muted);margin-bottom:var(--space-md);
-               padding-bottom:var(--space-sm);border-bottom:1px solid var(--border)">
-      {{ group.type_label }}
-    </h2>
+    <div class="group-heading">
+      📂 {{ group.type_label }}
+    </div>
     <div class="article-list">
       {% for a in group.articles %}
-      <a href="{{ base_url }}{{ a.url }}" class="article-list-item">
+      <a href="{{ base_url }}{{ a.url }}" class="article-list-item" id="article-{{ loop.index }}-{{ group.type_label | lower | replace(' ', '-') }}">
         <div>
           <div class="article-list-title">{{ a.title }}</div>
           <div class="article-list-meta" style="margin-top:4px">
-            {{ a.date }}
+            📅 {{ a.date }}
             {% if a.scope_label %} · {{ a.scope_label }}{% endif %}
             {% if a.confidence_score %}
             · <span class="{% if a.confidence_score >= 0.75 %}text-green{% elif a.confidence_score >= 0.4 %}text-gold{% else %}text-down{% endif %}">
@@ -71,21 +85,6 @@
     </div>
   </section>
   {% endfor %}
-
-  {# Language switcher for commodity page #}
-  {% if lang_variants %}
-  <div class="sidebar-card" style="margin-top:var(--space-xl)">
-    <div class="sidebar-title">This report in other languages</div>
-    <div class="lang-list">
-      {% for v in lang_variants %}
-      <a href="{{ base_url }}{{ v.url }}" class="lang-link {% if v.code == current_lang %}current-lang{% endif %}">
-        <span>{{ v.label }}</span>
-        <span>→</span>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
 </div>
+
 {% endblock %}

@@ -5,12 +5,17 @@
 {# ---- Hero ---- #}
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">Live Daily Updates</div>
-    <h1>India's Mandi Prices,<br>In Your Language</h1>
+    <div class="hero-badge">🌿 Live Daily Updates</div>
+    <h1>आज का मंडी भाव<br><span>India's Mandi Prices</span></h1>
     <p class="hero-sub">
-      Soybean &amp; Cotton rates across India — today's government market data,
-      analyzed by AI, published in English, Hindi, Marathi &amp; Gujarati.
+      Soybean &amp; Cotton rates from across India — today's government APMC data,
+      analyzed by AI, in your language.
     </p>
+
+    <div class="hero-actions">
+      <a href="{{ base_url }}/soybean/" class="btn-primary">🌱 Soybean Prices</a>
+      <a href="{{ base_url }}/cotton/"  class="btn-outline">🌾 Cotton Prices</a>
+    </div>
 
     <div class="search-wrapper">
       <span class="search-icon" aria-hidden="true">🔍</span>
@@ -28,19 +33,19 @@
     <div class="hero-stats">
       <div class="hero-stat">
         <span class="hero-stat-value">{{ stats.total_articles }}</span>
-        <span class="hero-stat-label">Articles Today</span>
+        <span class="hero-stat-label">Reports Today</span>
       </div>
       <div class="hero-stat">
         <span class="hero-stat-value">4</span>
         <span class="hero-stat-label">Languages</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-value">{{ stats.total_markets }}</span>
+        <span class="hero-stat-value">{{ stats.total_markets or '50+' }}</span>
         <span class="hero-stat-label">Markets Covered</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-value">{{ latest_date }}</span>
-        <span class="hero-stat-label">Last Updated</span>
+        <span class="hero-stat-value">Free</span>
+        <span class="hero-stat-label">Always Free</span>
       </div>
     </div>
   </div>
@@ -50,40 +55,49 @@
 <section class="section">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title">Commodities</h2>
-      <span class="text-muted" style="font-size:.85rem">Click to explore reports</span>
+      <h2 class="section-title">📦 Choose Your Commodity</h2>
+      <span class="text-muted" style="font-size:.85rem">Tap to see today's reports</span>
     </div>
     <div class="commodity-cards">
       {% for c in commodities %}
-      <a href="{{ base_url }}/{{ c.slug }}/" class="commodity-card">
-        <span class="commodity-icon">{{ '🌱' if c.slug == 'soybean' else '☁️' }}</span>
+      {% set is_soy = c.slug == 'soybean' %}
+      <a href="{{ base_url }}/{{ c.slug }}/" class="commodity-card {{ c.slug }}">
+        <div class="commodity-icon-wrap">
+          {{ '🌱' if is_soy else '🌾' }}
+        </div>
         <div class="commodity-name">{{ c.name }}</div>
-        <div class="commodity-count">{{ c.article_count }} reports today in {{ c.lang_count }} languages</div>
+        <div class="commodity-count">{{ c.article_count }} reports today · {{ c.lang_count }} languages</div>
         {% if c.msp %}
-        <div class="commodity-msp">MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal</div>
+        <div class="commodity-msp">
+          📋 MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal
+        </div>
         {% endif %}
+        <div class="commodity-cta">
+          View all {{ c.name }} reports
+          <span>→</span>
+        </div>
       </a>
       {% endfor %}
     </div>
   </div>
 </section>
 
-{# ---- Recent Articles ---- #}
+{# ---- Latest Reports ---- #}
 <section class="section" style="padding-top:0">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title">Latest Reports</h2>
+      <h2 class="section-title">📰 Latest Reports</h2>
       <a href="{{ base_url }}/soybean/" class="section-link">View all →</a>
     </div>
     <div class="cards-grid">
       {% for article in recent_articles %}
-      <a href="{{ base_url }}{{ article.url }}" class="card">
+      <a href="{{ article.url }}" class="card">
         <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
-          {{ article.commodity | upper }}
+          {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
         </span>
         <div class="card-title">{{ article.title }}</div>
         <div class="card-meta">
-          <span>{{ article.date }}</span>
+          <span>📅 {{ article.date }}</span>
           <span class="card-meta-sep">·</span>
           <span>{{ article.type_label }}</span>
           {% if article.lang != 'en' %}
@@ -99,23 +113,47 @@
 </section>
 
 {# ---- How It Works ---- #}
-<section class="section" style="background:var(--bg-surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+<section class="how-it-works">
   <div class="container">
-    <h2 class="section-title" style="text-align:center;margin-bottom:var(--space-2xl)">How MandiBhav Works</h2>
-    <div class="cards-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
+    <h2 class="section-title" style="text-align:center">How MandiBhav Works</h2>
+    <p style="text-align:center;color:var(--text-muted);margin-top:.5rem;font-size:.95rem">
+      Transparent, government-data powered, AI-generated reports — every day
+    </p>
+    <div class="step-cards">
       {% set steps = [
-        ('📡', 'Live Government Data', 'Prices fetched from data.gov.in OGD API — the official Indian government market data portal'),
-        ('📊', 'Pre-computed Analytics', 'Day-over-day changes, state rankings, top gainers &amp; losers — all computed before the AI sees the data'),
-        ('🤖', 'AI Article Generation', 'Gemini generates structured articles grounded in real data, injecting MSP context, seasonal phases, and market significance'),
-        ('🌐', 'Multilingual Publishing', 'Every article published in English, Hindi, Marathi, and Gujarati with HTML-preserving translation and numeric QA'),
+        ('📡', 'Government Data', 'Prices fetched directly from data.gov.in — India\'s official APMC market data portal'),
+        ('📊', 'Smart Analytics', 'Day-over-day changes, state rankings, top gainers & losers computed before AI sees data'),
+        ('🤖', 'AI Writing', 'Gemini AI generates clear, fact-grounded articles with MSP context and seasonal insights'),
+        ('🌐', 'Your Language', 'Every report in English, हिंदी, मराठी, and ગુજરાતી — with verified numeric accuracy'),
       ] %}
       {% for icon, title, desc in steps %}
-      <div class="card" style="cursor:default">
-        <div style="font-size:2rem;margin-bottom:var(--space-md)">{{ icon }}</div>
-        <div class="card-title">{{ title }}</div>
-        <div class="card-meta" style="display:block;margin-top:var(--space-sm)">{{ desc }}</div>
+      <div class="step-card">
+        <div class="step-number">{{ loop.index }}</div>
+        <span class="step-icon">{{ icon }}</span>
+        <div class="step-title">{{ title }}</div>
+        <div class="step-desc">{{ desc }}</div>
       </div>
       {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ---- Language Banner ---- #}
+<section class="section">
+  <div class="container">
+    <div style="background:linear-gradient(135deg,var(--green-700),var(--green-600));border-radius:var(--radius-xl);padding:var(--space-2xl);text-align:center;color:white">
+      <div style="font-size:2rem;margin-bottom:var(--space-md)">🌐</div>
+      <h2 style="font-size:1.5rem;font-weight:800;margin-bottom:var(--space-sm)">Available in 4 Languages</h2>
+      <p style="color:rgba(255,255,255,.8);margin-bottom:var(--space-xl);max-width:500px;margin-left:auto;margin-right:auto">
+        Read mandi price reports in your own language. Same data, same insights — in English, Hindi, Marathi, and Gujarati.
+      </p>
+      <div style="display:flex;justify-content:center;gap:var(--space-md);flex-wrap:wrap">
+        {% for c in commodities %}
+        <a href="{{ base_url }}/{{ c.slug }}/" style="background:rgba(255,255,255,.15);color:white;padding:10px 22px;border-radius:var(--radius-full);font-weight:600;font-size:.9rem;border:1.5px solid rgba(255,255,255,.3);transition:background .2s">
+          {{ '🌱' if c.slug == 'soybean' else '🌾' }} {{ c.name }}
+        </a>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </section>

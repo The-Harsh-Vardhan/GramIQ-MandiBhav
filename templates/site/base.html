@@ -86,11 +86,19 @@
 <body>
 
 {# ============================================================
+   TOP BAR — language quick access (GramIQ style)
+   ============================================================ #}
+<div style="background:var(--green-700);color:white;font-size:.78rem;font-weight:600;text-align:center;padding:7px var(--space-md);letter-spacing:.03em">
+  🌿 Free daily mandi bhav reports — सोयाबीन · कपास — 4 भाषाओं में &nbsp;|&nbsp;
+  <a href="{{ base_url }}/rss.xml" style="color:rgba(255,255,255,.85);text-decoration:underline">Subscribe RSS</a>
+</div>
+
+{# ============================================================
    NAVBAR
    ============================================================ #}
 <header class="navbar">
   <div class="container">
-    <a href="{{ base_url }}/" class="navbar-brand">
+    <a href="{{ base_url }}/" class="navbar-brand" id="site-logo">
       <div class="brand-logo">🌾</div>
       <div>
         MandiBhav
@@ -98,23 +106,23 @@
       </div>
     </a>
 
-    <nav aria-label="Main navigation">
+    <nav aria-label="Main navigation" id="main-nav">
       <ul class="navbar-nav">
-        <li><a href="{{ base_url }}/" {% if active_nav == 'home' %}class="active"{% endif %}>Home</a></li>
-        <li><a href="{{ base_url }}/soybean/" {% if active_nav == 'soybean' %}class="active"{% endif %}>Soybean</a></li>
-        <li><a href="{{ base_url }}/cotton/" {% if active_nav == 'cotton' %}class="active"{% endif %}>Cotton</a></li>
-        <li><a href="{{ base_url }}/rss.xml">RSS</a></li>
+        <li><a href="{{ base_url }}/" {% if active_nav == 'home' %}class="active"{% endif %} id="nav-home">🏠 Home</a></li>
+        <li><a href="{{ base_url }}/soybean/" {% if active_nav == 'soybean' %}class="active"{% endif %} id="nav-soybean">🌱 Soybean</a></li>
+        <li><a href="{{ base_url }}/cotton/" {% if active_nav == 'cotton' %}class="active"{% endif %} id="nav-cotton">🌾 Cotton</a></li>
+        <li><a href="{{ base_url }}/rss.xml" id="nav-rss">📡 RSS</a></li>
       </ul>
     </nav>
 
-    <div class="lang-switcher" aria-label="Language switcher">
+    <div class="lang-switcher" aria-label="Language switcher" id="lang-switcher">
       {% set lang_map = [('en','EN'),('hi','हि'),('mr','म'),('gu','ગુ')] %}
       {% for code, label in lang_map %}
         {% if lang_urls and lang_urls[code] is defined %}
         <a href="{{ lang_urls[code] }}" class="lang-pill {% if current_lang == code %}current{% endif %}"
-           aria-label="{{ code }}">{{ label }}</a>
+           aria-label="{{ code }}" id="lang-{{ code }}">{{ label }}</a>
         {% else %}
-        <span class="lang-pill {% if current_lang == code %}current{% endif %}">{{ label }}</span>
+        <span class="lang-pill {% if current_lang == code %}current{% endif %}" id="lang-{{ code }}-disabled">{{ label }}</span>
         {% endif %}
       {% endfor %}
     </div>
@@ -137,28 +145,30 @@
       <div>
         <div class="footer-brand-name">🌾 MandiBhav by GramIQ</div>
         <p class="footer-brand-desc">
-          Daily mandi price reports in 4 languages,<br>
-          powered by government data and AI.
+          Free daily mandi price reports in 4 languages —<br>
+          English, हिंदी, मराठी &amp; ગુજરાતી.<br>
+          Powered by government APMC data and AI.
         </p>
       </div>
       <div>
         <div class="footer-heading">Commodities</div>
         <div class="footer-links">
-          <a href="{{ base_url }}/soybean/">Soybean Rates</a>
-          <a href="{{ base_url }}/cotton/">Cotton Rates</a>
+          <a href="{{ base_url }}/soybean/">🌱 Soybean Rates</a>
+          <a href="{{ base_url }}/cotton/">🌾 Cotton Rates</a>
         </div>
       </div>
       <div>
-        <div class="footer-heading">Data Source</div>
+        <div class="footer-heading">Resources</div>
         <div class="footer-links">
           <a href="https://data.gov.in" target="_blank" rel="noopener">data.gov.in (OGD)</a>
           <a href="{{ base_url }}/sitemap.xml">Sitemap</a>
           <a href="{{ base_url }}/rss.xml">RSS Feed</a>
+          <a href="https://gramiq.ai" target="_blank" rel="noopener">GramIQ App</a>
         </div>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2026 GramIQ. Prices are indicative — verify before trading.</span>
+      <span>© 2026 GramIQ. Prices are indicative — verify with your local APMC before trading.</span>
       <span>Generated {{ generated_at }}</span>
     </div>
   </div>
