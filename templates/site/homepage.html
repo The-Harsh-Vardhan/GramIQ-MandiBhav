@@ -2,158 +2,246 @@
 
 {% block content %}
 
-{# ---- Hero ---- #}
+{# ============================================================
+   HERO SECTION
+   ============================================================ #}
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">🌿 Live Daily Updates</div>
-    <h1>आज का मंडी भाव<br><span>India's Mandi Prices</span></h1>
-    <p class="hero-sub">
-      Soybean &amp; Cotton rates from across India — today's government APMC data,
-      analyzed by AI, in your language.
-    </p>
+    
+    {# Left Content Column #}
+    <div class="hero-content">
+      <div class="hero-tag">🌿 Live Daily Updates</div>
+      <h1>आज का मंडी भाव<br><span>Mandi Prices by GramIQ</span></h1>
+      <p class="hero-sub">
+        Soybean &amp; Cotton rates from across India. Verified daily government APMC market data, analyzed by AI, in your own language.
+      </p>
 
-    <div class="hero-actions">
-      <a href="{{ base_url }}/soybean/" class="btn-primary">🌱 Soybean Prices</a>
-      <a href="{{ base_url }}/cotton/"  class="btn-outline">🌾 Cotton Prices</a>
+      <div class="hero-actions">
+        <a href="{{ base_url }}/soybean/" class="btn-primary">🌱 Soybean Prices</a>
+        <a href="{{ base_url }}/cotton/" class="btn-outline">🌾 Cotton Prices</a>
+      </div>
+
+      {# Client Search Box #}
+      <div class="search-wrapper">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="Search markets, states, crops..."
+          autocomplete="off"
+          aria-label="Search reports"
+        >
+        <div id="search-results" role="region" aria-live="polite"></div>
+      </div>
+
+      {# Stats #}
+      <div class="hero-stats">
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">{{ stats.total_articles | default('20+') }}</span>
+          <span class="hero-stat-lbl">Reports Today</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">4</span>
+          <span class="hero-stat-lbl">Languages</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">{{ stats.total_markets | default('50+') }}</span>
+          <span class="hero-stat-lbl">Markets Covered</span>
+        </div>
+      </div>
     </div>
 
-    <div class="search-wrapper">
-      <span class="search-icon" aria-hidden="true">🔍</span>
-      <input
-        id="search-input"
-        class="search-input"
-        type="search"
-        placeholder="Search markets, states, commodities..."
-        autocomplete="off"
-        aria-label="Search articles"
-      >
-    </div>
-    <div id="search-results" role="region" aria-live="polite"></div>
+    {# Right WhatsApp Chat Mockup Column #}
+    <div class="hero-visual">
+      <div class="whatsapp-mockup">
+        <div class="wa-header">
+          <div class="wa-avatar">🌾</div>
+          <div class="wa-status">
+            <span class="wa-name">GramIQ Mandi Prices</span>
+            <span class="wa-online">online</span>
+          </div>
+        </div>
+        <div class="wa-chat-area">
+          <div class="wa-bubble incoming">
+            <div class="wa-bubble-title">GramIQ Mandi Service</div>
+            Pehle bhav jano, phir becho! Welcome to MandiBhav by GramIQ.
+            <br><br>
+            Please choose a crop below to get today's average rates directly:
+            <div class="wa-time">09:15 AM</div>
+          </div>
+          
+          <div class="wa-bubble outgoing">
+            Soybean rates 🌱
+            <div class="wa-time">09:16 AM</div>
+          </div>
 
-    <div class="hero-stats">
-      <div class="hero-stat">
-        <span class="hero-stat-value">{{ stats.total_articles }}</span>
-        <span class="hero-stat-label">Reports Today</span>
-      </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">4</span>
-        <span class="hero-stat-label">Languages</span>
-      </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">{{ stats.total_markets or '50+' }}</span>
-        <span class="hero-stat-label">Markets Covered</span>
-      </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">Free</span>
-        <span class="hero-stat-label">Always Free</span>
+          <div class="wa-bubble incoming">
+            <div class="wa-bubble-title">Soybean Daily Report</div>
+            📅 <strong>Today's Soybean Rates</strong>
+            <br><br>
+            • Maharashtra: ₹5,850 - ₹6,200/q
+            <br>
+            • Madhya Pradesh: ₹5,700 - ₹6,050/q
+            <br>
+            • Peak Market: Washim (₹6,300/q)
+            <br><br>
+            Reply with state name for detailed market price breakdown.
+            
+            <div class="wa-buttons">
+              <span class="wa-btn">Maharashtra Details</span>
+              <span class="wa-btn">Madhya Pradesh Details</span>
+              <span class="wa-btn">Main Menu</span>
+            </div>
+            <div class="wa-time">09:16 AM</div>
+          </div>
+        </div>
       </div>
     </div>
+
   </div>
 </section>
 
-{# ---- Commodity Cards ---- #}
+{# ============================================================
+   COMMODITY CARDS SECTION
+   ============================================================ #}
 <section class="section">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title">📦 Choose Your Commodity</h2>
-      <span class="text-muted" style="font-size:.85rem">Tap to see today's reports</span>
+      <h2>Choose Your Crop</h2>
+      <p>Select a crop below to view daily average pricing, historical comparison, and district-wise details</p>
     </div>
-    <div class="commodity-cards">
+    
+    <div class="commodity-grid">
       {% for c in commodities %}
       {% set is_soy = c.slug == 'soybean' %}
-      <a href="{{ base_url }}/{{ c.slug }}/" class="commodity-card {{ c.slug }}">
-        <div class="commodity-icon-wrap">
+      <div class="commodity-card {% if is_soy %}soybean{% else %}cotton{% endif %}">
+        <div class="commodity-card-icon">
           {{ '🌱' if is_soy else '🌾' }}
         </div>
-        <div class="commodity-name">{{ c.name }}</div>
-        <div class="commodity-count">{{ c.article_count }} reports today · {{ c.lang_count }} languages</div>
+        <h3>{{ c.name }}</h3>
+        <p class="commodity-card-desc">
+          Get latest APMC market prices, modal averages, and state-wise reports.
+        </p>
+        <div class="commodity-card-meta">
+          <strong>{{ c.article_count }}</strong> reports generated today in <strong>{{ c.lang_count }}</strong> languages.
+        </div>
         {% if c.msp %}
-        <div class="commodity-msp">
-          📋 MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal
+        <div class="commodity-card-msp">
+          📋 Govt. MSP {{ c.msp_year }}: ₹{{ "{:,.0f}".format(c.msp) }}/quintal
         </div>
         {% endif %}
-        <div class="commodity-cta">
-          View all {{ c.name }} reports
-          <span>→</span>
-        </div>
-      </a>
+        <a href="{{ base_url }}/{{ c.slug }}/" class="btn-primary">
+          View {{ c.name }} Reports →
+        </a>
+      </div>
       {% endfor %}
     </div>
   </div>
 </section>
 
-{# ---- Latest Reports ---- #}
-<section class="section" style="padding-top:0">
+{# ============================================================
+   LATEST REPORTS SECTION
+   ============================================================ #}
+<section class="section" style="padding-top: 0;">
   <div class="container">
-    <div class="section-header">
-      <h2 class="section-title">📰 Latest Reports</h2>
-      <a href="{{ base_url }}/soybean/" class="section-link">View all →</a>
+    <div class="section-header" style="text-align: left; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div>
+        <h2>📰 Latest Price Reports</h2>
+        <p style="margin-top: 4px;">Recently generated market bulletins and local updates</p>
+      </div>
+      <a href="{{ base_url }}/soybean/" class="btn-outline" style="padding: 8px 18px; font-size: 0.85rem;">All Reports →</a>
     </div>
-    <div class="cards-grid">
+
+    <div class="article-grid">
       {% for article in recent_articles %}
-      <a href="{{ article.url }}" class="card">
-        <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
-          {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
-        </span>
-        <div class="card-title">{{ article.title }}</div>
-        <div class="card-meta">
+      <div class="article-card">
+        <div class="article-card-header">
+          <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
+            {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
+          </span>
+          <h3 class="article-card-title">{{ article.title }}</h3>
+        </div>
+        <div class="article-card-meta">
           <span>📅 {{ article.date }}</span>
-          <span class="card-meta-sep">·</span>
+          <span>•</span>
           <span>{{ article.type_label }}</span>
           {% if article.lang != 'en' %}
-          <span class="card-meta-sep">·</span>
-          <span>{{ article.lang | upper }}</span>
+          <span>•</span>
+          <span style="font-weight: 700; color: var(--primary);">{{ article.lang | upper }}</span>
           {% endif %}
         </div>
-        <div class="card-arrow">Read report →</div>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-
-{# ---- How It Works ---- #}
-<section class="how-it-works">
-  <div class="container">
-    <h2 class="section-title" style="text-align:center">How MandiBhav Works</h2>
-    <p style="text-align:center;color:var(--text-muted);margin-top:.5rem;font-size:.95rem">
-      Transparent, government-data powered, AI-generated reports — every day
-    </p>
-    <div class="step-cards">
-      {% set steps = [
-        ('📡', 'Government Data', 'Prices fetched directly from data.gov.in — India\'s official APMC market data portal'),
-        ('📊', 'Smart Analytics', 'Day-over-day changes, state rankings, top gainers & losers computed before AI sees data'),
-        ('🤖', 'AI Writing', 'Gemini AI generates clear, fact-grounded articles with MSP context and seasonal insights'),
-        ('🌐', 'Your Language', 'Every report in English, हिंदी, मराठी, and ગુજરાતી — with verified numeric accuracy'),
-      ] %}
-      {% for icon, title, desc in steps %}
-      <div class="step-card">
-        <div class="step-number">{{ loop.index }}</div>
-        <span class="step-icon">{{ icon }}</span>
-        <div class="step-title">{{ title }}</div>
-        <div class="step-desc">{{ desc }}</div>
+        <a href="{{ article.url }}" class="article-card-footer">
+          <span>Read Full Report</span>
+          <span>➜</span>
+        </a>
       </div>
       {% endfor %}
     </div>
   </div>
 </section>
 
-{# ---- Language Banner ---- #}
+{# ============================================================
+   FEATURES & BENEFITS SECTION
+   ============================================================ #}
+<section class="section features-section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Why Indian Farmers Trust GramIQ</h2>
+      <p>Empowering agricultural decision-making with verified, fast intelligence</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon-box">📢</div>
+        <h3>Price Advantage</h3>
+        <p>Know current local mandi modal averages before committing to sales and avoid under-selling produce.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon-box">🤝</div>
+        <h3>Negotiate Confidently</h3>
+        <p>Empower yourself with official government APMC benchmarks to negotiate best prices with commission agents and buyers.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon-box">📈</div>
+        <h3>Right-Time Selling</h3>
+        <p>Monitor market arrivals and price changes over time to decide the most profitable week to sell.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ============================================================
+   FAQ SECTION (COLLAPSIBLE ACCORDIONS)
+   ============================================================ #}
 <section class="section">
   <div class="container">
-    <div style="background:linear-gradient(135deg,var(--green-700),var(--green-600));border-radius:var(--radius-xl);padding:var(--space-2xl);text-align:center;color:white">
-      <div style="font-size:2rem;margin-bottom:var(--space-md)">🌐</div>
-      <h2 style="font-size:1.5rem;font-weight:800;margin-bottom:var(--space-sm)">Available in 4 Languages</h2>
-      <p style="color:rgba(255,255,255,.8);margin-bottom:var(--space-xl);max-width:500px;margin-left:auto;margin-right:auto">
-        Read mandi price reports in your own language. Same data, same insights — in English, Hindi, Marathi, and Gujarati.
-      </p>
-      <div style="display:flex;justify-content:center;gap:var(--space-md);flex-wrap:wrap">
-        {% for c in commodities %}
-        <a href="{{ base_url }}/{{ c.slug }}/" style="background:rgba(255,255,255,.15);color:white;padding:10px 22px;border-radius:var(--radius-full);font-weight:600;font-size:.9rem;border:1.5px solid rgba(255,255,255,.3);transition:background .2s">
-          {{ '🌱' if c.slug == 'soybean' else '🌾' }} {{ c.name }}
-        </a>
-        {% endfor %}
-      </div>
+    <div class="section-header">
+      <h2>Frequently Asked Questions</h2>
+      <p>Have questions about how we compile mandi rates? Check details below</p>
+    </div>
+
+    <div class="faq-container">
+      <details class="faq-details">
+        <summary class="faq-summary">How do I get mandi prices from GramIQ?</summary>
+        <div class="faq-content">
+          You can get daily rates by checking this site, subscribing to our RSS feeds, or subscribing directly via WhatsApp to receive automatic notifications whenever rates are updated.
+        </div>
+      </details>
+      
+      <details class="faq-details">
+        <summary class="faq-summary">Where does this price data come from?</summary>
+        <div class="faq-content">
+          All prices are sourced from data.gov.in (the Open Government Data Portal of India), which aggregates official reports directly submitted by APMC mandis across India.
+        </div>
+      </details>
+
+      <details class="faq-details">
+        <summary class="faq-summary">Are these prices official buy rates?</summary>
+        <div class="faq-content">
+          No, these rates are indicative average modal rates for the day. Local grading, quality parameters, moisture content, and market conditions will influence final quotes. Always verify locally before transaction.
+        </div>
+      </details>
     </div>
   </div>
 </section>

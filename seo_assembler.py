@@ -11,7 +11,6 @@ Responsibilities:
 import json
 import logging
 import re
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -26,7 +25,8 @@ from config import (
     VALID_TRANSLATION_LENGTH_RATIO,
 )
 from schemas import (
-    AnalyticsPayload, ArticleOutput, TranslatedArticle, FinalArticleJSON, ScopeTarget
+    AnalyticsPayload, ArticleDraft, ArticleOutput, FAQItem, FinalArticleJSON, MarketRow,
+    ScopeTarget, TranslatedArticle
 )
 from translator import check_numeric_integrity, check_length_ratio
 
@@ -213,6 +213,121 @@ def _plain_text(html: str) -> str:
     return re.sub(r"<[^>]+>", " ", html).strip()
 
 
+def build_market_summary_table(analytics: AnalyticsPayload) -> list[MarketRow]:
+    """Build a deterministic market summary table from analytics."""
+    rows = analytics.markets or analytics.top_markets_by_price
+    limit = 5 if analytics.article_type != "market_spotlight" else 1
+    return [
+        MarketRow(
+            market=row.market,
+            state=row.state,
+            min_price=row.min_price,
+            max_price=row.max_price,
+            modal_price=row.modal_price,
+            arrival_tonnes=row.arrival_tonnes,
+        )
+        for row in rows[:limit]
+    ]
+
+
+def build_meta_description(
+    title: str,
+    analytics: AnalyticsPayload,
+    scope: ScopeTarget,
+) -> str:
+    """Create a deterministic SEO description within search-friendly length."""
+    parts = [
+        f"{scope.scope_label} {analytics.commodity.title()} mandi bhav for {analytics.date}.",
+        f"Avg modal price Rs {analytics.national_avg_modal:,.0f}.",
+        f"Arrivals {analytics.national_total_arrivals:,.0f} tonnes.",
+    ]
+    if analytics.national_day_change_pct is not None:
+        direction = "up" if analytics.national_day_change_pct >= 0 else "down"
+        parts.append(
+            f"Day change {abs(analytics.national_day_change_pct):.1f}% {direction}."
+        )
+    text = " ".join(parts)
+    if len(text) > 165:
+        text = text[:162].rstrip(" ,.-") + "..."
+    if len(text) < 50:
+        text = f"{title}. {text}"
+    return text
+
+
+def build_template_faqs(
+    analytics: AnalyticsPayload,
+    scope: ScopeTarget,
+) -> list[FAQItem]:
+    """Build template FAQs directly from analytics."""
+    faqs: list[FAQItem] = []
+    commodity_name = analytics.commodity.title()
+
+    faqs.append(
+        FAQItem(
+            question=f"What is the {commodity_name} mandi bhav in {scope.scope_label} today?",
+            answer=(
+                f"On {analytics.date}, the average modal price for {commodity_name.lower()} "
+                f"in {scope.scope_label} is Rs {analytics.national_avg_modal:,.0f} per quintal."
+            ),
+        )
+    )
+
+    if analytics.top_markets_by_price:
+        top_market = analytics.top_markets_by_price[0]
+        faqs.append(
+            FAQItem(
+                question=f"Which market is quoting the strongest {commodity_name.lower()} price today?",
+                answer=(
+                    f"{top_market.market}, {top_market.state} is among the strongest reported markets "
+                    f"today at Rs {top_market.modal_price:,.0f} per quintal."
+                ),
+            )
+        )
+
+    if analytics.national_total_arrivals:
+        faqs.append(
+            FAQItem(
+                question=f"How much {commodity_name.lower()} arrival is reported today?",
+                answer=(
+                    f"Reported arrivals for this scope add up to about "
+                    f"{analytics.national_total_arrivals:,.0f} tonnes on {analytics.date}."
+                ),
+            )
+        )
+
+    if len(faqs) < 3 and analytics.top_gainers:
+        gainer = analytics.top_gainers[0]
+        faqs.append(
+            FAQItem(
+                question=f"Which market showed the sharpest one-day move in {commodity_name.lower()}?",
+                answer=(
+                    f"{gainer.market}, {gainer.state} moved to Rs {gainer.modal_price:,.0f} per quintal, "
+                    f"a change of {gainer.day_change_pct:.2f}% from the previous day."
+                ),
+            )
+        )
+
+    return faqs[:3]
+
+
+def assemble_article_output(
+    draft: ArticleDraft,
+    analytics: AnalyticsPayload,
+    scope: ScopeTarget,
+) -> ArticleOutput:
+    """Expand a Gemini draft into the full deterministic English article payload."""
+    from llm_engine import build_keywords
+
+    return ArticleOutput(
+        title=draft.title,
+        meta_description=build_meta_description(draft.title, analytics, scope),
+        body_html=draft.body_html,
+        keywords=build_keywords(analytics.commodity, scope.article_type, scope),
+        market_summary_table=build_market_summary_table(analytics),
+        faqs=build_template_faqs(analytics, scope),
+    )
+
+
 def render_article_jsonld(
     article: ArticleOutput,
     date: str,
@@ -332,15 +447,15 @@ def write_article_file(
 
     if status == "published":
         file_dir = output_dir / date / scope
+        file_path = file_dir / f"{lang}.json"
     elif status == "review_required":
         file_dir = output_dir / date / "review"
-        scope = f"{scope}_{lang}"
+        file_path = file_dir / f"{scope}_{lang}.json"
     else:  # blocked
         file_dir = output_dir / date / "blocked"
-        scope = f"{scope}_{lang}"
+        file_path = file_dir / f"{scope}_{lang}.json"
 
     file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / f"{lang}.json"
 
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(final_article.model_dump(), f, ensure_ascii=False, indent=2)

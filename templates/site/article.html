@@ -5,13 +5,13 @@
   <div class="article-layout">
 
     {# =========================================================
-       MAIN COLUMN
+       LEFT MAIN CONTENT COLUMN
        ========================================================= #}
-    <article>
+    <article class="article-detail">
 
-      {# Breadcrumb #}
+      {# Breadcrumbs #}
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="{{ base_url }}/">🏠 Home</a>
+        <a href="{{ base_url }}/">Home</a>
         <span class="breadcrumb-sep">›</span>
         <a href="{{ base_url }}/{{ article.commodity }}/">{{ article.commodity | title }}</a>
         {% if article.scope_label and article.scope_label != 'National' %}
@@ -20,12 +20,13 @@
         {% endif %}
       </nav>
 
-      {# Article Header #}
-      <header class="article-header">
-        <div class="article-tags">
+      {# Header Meta #}
+      <header class="article-detail-header">
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: var(--space-md);">
           <span class="card-tag {{ 'tag-soybean' if article.commodity == 'soybean' else 'tag-cotton' }}">
             {{ '🌱' if article.commodity == 'soybean' else '🌾' }} {{ article.commodity | title }}
           </span>
+          
           <span class="article-type-badge">{{ type_label }}</span>
 
           {% if article.confidence_score is defined %}
@@ -37,6 +38,10 @@
             <span class="confidence-badge conf-medium" title="Reviewed before publishing">
               ⚠ {{ (article.confidence_score * 100) | int }}% confidence
             </span>
+            {% else %}
+            <span class="confidence-badge conf-low" title="Low confidence report">
+              ⚠ {{ (article.confidence_score * 100) | int }}% confidence
+            </span>
             {% endif %}
           {% endif %}
 
@@ -46,16 +51,16 @@
         <h1 class="article-title">{{ article.title }}</h1>
       </header>
 
-      {# Quick Summary #}
+      {# Quick Summary Callout #}
       <div class="quick-summary">
-        <div class="quick-summary-label">📋 Quick Summary</div>
+        <div class="quick-summary-title">📋 Summary Dashboard</div>
         <p>{{ article.meta_description }}</p>
       </div>
 
-      {# Market Price Table #}
+      {# APMC Price Table #}
       {% if article.market_summary_table and article.market_summary_table | length > 0 %}
       <div class="market-table-wrapper">
-        <div class="market-table-header">📊 Market Prices — {{ article.date }}</div>
+        <div class="market-table-header">📊 APMC Modal Rates — {{ article.date }}</div>
         <table class="market-table">
           <thead>
             <tr>
@@ -70,12 +75,12 @@
           <tbody>
             {% for row in article.market_summary_table %}
             <tr>
-              <td style="font-weight:600">{{ row.market }}</td>
+              <td style="font-weight: 600; color: var(--text-primary);">{{ row.market }}</td>
               <td>{{ row.state }}</td>
               <td class="price-min">{{ "{:,.0f}".format(row.min_price) }}</td>
               <td class="price-max">{{ "{:,.0f}".format(row.max_price) }}</td>
               <td class="price-modal">₹{{ "{:,.0f}".format(row.modal_price) }}</td>
-              <td class="arrivals">{{ "{:,.1f}".format(row.arrival_tonnes) }}</td>
+              <td style="color: var(--text-muted);">{{ "{:,.1f}".format(row.arrival_tonnes) }} t</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -83,40 +88,41 @@
       </div>
       {% endif %}
 
-      {# Main Article Body #}
+      {# Main Generated Analysis Text #}
       <div class="article-body">
         {{ article.body | safe }}
       </div>
 
-      {# FAQ Section #}
+      {# FAQ Accordions #}
       {% if article.faqs and article.faqs | length > 0 %}
-      <section class="faq-section">
-        <h2 class="faq-title">❓ Frequently Asked Questions</h2>
-        {% for faq in article.faqs %}
-        <div class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" id="faq-{{ loop.index }}">
-          <button class="faq-question" aria-expanded="false">
-            <span itemprop="name">{{ faq.question }}</span>
-            <span class="faq-icon" aria-hidden="true">+</span>
-          </button>
-          <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <span itemprop="text">{{ faq.answer }}</span>
-          </div>
+      <section class="faq-section" style="margin-top: var(--space-3xl);">
+        <h2 style="font-size: 1.45rem; margin-bottom: var(--space-lg);">❓ Frequently Asked Questions</h2>
+        <div class="faq-container">
+          {% for faq in article.faqs %}
+          <details class="faq-details" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" id="faq-{{ loop.index }}">
+            <summary class="faq-summary" itemprop="name">
+              {{ faq.question }}
+            </summary>
+            <div class="faq-content" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <p itemprop="text">{{ faq.answer }}</p>
+            </div>
+          </details>
+          {% endfor %}
         </div>
-        {% endfor %}
       </section>
       {% endif %}
 
     </article>
 
     {# =========================================================
-       SIDEBAR
+       RIGHT SIDEBAR COLUMN
        ========================================================= #}
     <aside class="article-sidebar">
 
-      {# Language Switcher #}
+      {# Language Selection Widget #}
       {% if available_langs and available_langs | length > 1 %}
       <div class="sidebar-card">
-        <div class="sidebar-title">🌐 Read in your language</div>
+        <div class="sidebar-card-title">🌐 Language Translation</div>
         <div class="lang-list">
           {% for lang in available_langs %}
           <a href="{{ base_url }}{{ lang.url }}"
@@ -124,61 +130,54 @@
              {% if lang.code == current_lang %}aria-current="page"{% endif %}
              id="sidebar-lang-{{ lang.code }}">
             <span>{{ lang.label }}</span>
-            {% if lang.code != current_lang %}<span>→</span>{% else %}<span>✓</span>{% endif %}
+            <span>{% if lang.code == current_lang %}✓{% else %}➜{% endif %}</span>
           </a>
           {% endfor %}
         </div>
       </div>
       {% endif %}
 
-      {# Article Metadata #}
+      {# Report Source Details #}
       <div class="sidebar-card">
-        <div class="sidebar-title">📄 About This Report</div>
+        <div class="sidebar-card-title">📄 Information Sources</div>
         <div class="source-info">
-          <p><strong>Commodity:</strong> {{ article.commodity | title }}</p>
-          <p><strong>Type:</strong> {{ type_label }}</p>
-          <p><strong>Date:</strong> {{ article.date }}</p>
-          <p><strong>Language:</strong> {{ lang_label }}</p>
-          <p><strong>Generated:</strong> {{ article.generated_at[:10] if article.generated_at else article.date }}</p>
-          <hr style="border:none;border-top:1px solid var(--border);margin:var(--space-md) 0">
+          <p><strong>Crop Name:</strong> {{ article.commodity | title }}</p>
+          <p><strong>Report Scope:</strong> {{ type_label }}</p>
+          <p><strong>Published:</strong> {{ article.date }}</p>
+          <p><strong>Report ID:</strong> {{ article.scope_key }}</p>
+          <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
           <p>
-            <strong>Data Source:</strong>
-            <a href="https://data.gov.in" target="_blank" rel="noopener">data.gov.in</a>
-            (OGD Portal, Govt of India)
+            <strong>Official Source:</strong><br>
+            <a href="https://data.gov.in" target="_blank" rel="noopener" style="text-decoration: underline;">data.gov.in (OGD Portal)</a>
           </p>
-          <p style="margin-top:var(--space-sm);font-size:.75rem;color:var(--text-muted)">
-            ⚠️ Prices are indicative. Verify with your local APMC before trading.
+          <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; margin-top: 4px;">
+            ⚠️ Prices listed are modal averages reported by local APMCs and are subject to market adjustments.
           </p>
         </div>
       </div>
 
-      {# Nav to commodity page #}
-      <div class="sidebar-card">
-        <div class="sidebar-title">📦 More Reports</div>
-        <a href="{{ base_url }}/{{ article.commodity }}/"
-           class="btn-primary" style="display:flex;font-size:.85rem;padding:10px 18px" id="more-reports-link">
-          View all {{ article.commodity | title }} reports →
-        </a>
-        <a href="{{ base_url }}/" class="btn-outline"
-           style="display:flex;font-size:.85rem;padding:10px 18px;margin-top:var(--space-sm);border-radius:var(--radius-full)">
-          🏠 Back to Home
+      {# GramIQ App CTA Widget #}
+      <div class="app-cta-card">
+        <span style="font-size: 2.2rem; display: block;">📱</span>
+        <h3>Get Live alerts</h3>
+        <p>Subscribe to our automated WhatsApp system or download the GramIQ App to get direct price alerts on your mobile phone.</p>
+        <a href="https://gramiq.ai" target="_blank" rel="noopener" class="btn-primary" id="sidebar-app-download">
+          ➤ Subscribe Now
         </a>
       </div>
 
-      {# GramIQ App CTA #}
-      <div style="background:var(--green-700);border-radius:var(--radius-lg);padding:var(--space-lg);text-align:center">
-        <div style="font-size:1.8rem;margin-bottom:var(--space-sm)">📱</div>
-        <div style="font-weight:700;color:white;font-size:.95rem;margin-bottom:var(--space-sm)">Get Live Mandi Alerts</div>
-        <p style="font-size:.8rem;color:rgba(255,255,255,.8);margin-bottom:var(--space-md);line-height:1.5">
-          Download GramIQ app for real-time price alerts in your language
-        </p>
-        <a href="https://gramiq.ai/app" target="_blank" rel="noopener"
-           style="display:inline-block;background:white;color:var(--green-700);font-weight:700;font-size:.85rem;padding:9px 20px;border-radius:var(--radius-full)">
-          ➤ Download GramIQ
+      {# Back Actions #}
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <a href="{{ base_url }}/{{ article.commodity }}/" class="btn-outline" style="font-size: 0.85rem; padding: 10px 16px;" id="more-reports-link">
+          All {{ article.commodity | title }} Reports
+        </a>
+        <a href="{{ base_url }}/" class="btn-outline" style="font-size: 0.85rem; padding: 10px 16px;">
+          🏠 Back to Homepage
         </a>
       </div>
 
     </aside>
+
   </div>
 </div>
 {% endblock %}

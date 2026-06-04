@@ -26,6 +26,43 @@ from pathlib import Path
 logger = logging.getLogger("mandibhav.main")
 
 
+def _find_cached_output(date: str, scope_key: str, language: str) -> Path | None:
+    """Return the cached output JSON path for a scope/language if it exists."""
+    import config
+
+    candidates = [
+        config.OUTPUT_DIR / date / scope_key / f"{language}.json",
+        config.OUTPUT_DIR / date / "review" / f"{scope_key}_{language}.json",
+        config.OUTPUT_DIR / date / "blocked" / f"{scope_key}_{language}.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def _load_cached_article_output(
+    cached_path: Path,
+    payload,
+    scope,
+):
+    """Rebuild an ArticleOutput-like object from the cached final JSON."""
+    from schemas import ArticleOutput
+    from seo_assembler import build_market_summary_table
+
+    with open(cached_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    return ArticleOutput(
+        title=data["title"],
+        meta_description=data["meta_description"],
+        body_html=data["body"],
+        keywords=data["keywords"],
+        market_summary_table=build_market_summary_table(payload),
+        faqs=data["faqs"],
+    ), data
+
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -153,93 +190,121 @@ def stage_generate_and_assemble(
 ) -> tuple[int, int, int]:
     """Generate, translate, and write all articles. Returns (published, review, blocked)."""
     import config
-    from llm_engine import generate_article, build_keywords
-    from translator import translate_article
+    from llm_engine import generate_articles_for_commodity, build_keywords
+    from translator import translate_articles
     from seo_assembler import compute_confidence, assemble_final_article, write_article_file
     from database import insert_article
-    from schemas import ScopeTarget
-
-    system_prompt = config.load_system_prompt()
-    article_templates = config.load_article_type_templates()
 
     counts = {"published": 0, "review_required": 0, "blocked": 0}
-    total = len(scope_targets)
+    scopes_by_commodity: dict[str, list] = {}
+    for scope in scope_targets:
+        scopes_by_commodity.setdefault(scope.commodity, []).append(scope)
 
-    for i, scope in enumerate(scope_targets, start=1):
-        payload = analytics_map.get(scope.scope_key)
-        if not payload:
-            logger.warning("No analytics for scope: %s", scope.scope_key)
-            counts["blocked"] += 1
-            continue
+    for commodity, commodity_scopes in scopes_by_commodity.items():
+        logger.info("Processing commodity batch: %s (%d scopes)", commodity, len(commodity_scopes))
+        scope_lookup = {scope.scope_key: scope for scope in commodity_scopes}
+        payload_lookup = {
+            scope.scope_key: analytics_map[scope.scope_key]
+            for scope in commodity_scopes
+            if scope.scope_key in analytics_map
+        }
 
-        logger.info("[%d/%d] Processing: %s", i, total, scope.scope_key)
+        article_inputs: dict[str, object] = {}
+        cached_meta: dict[str, dict] = {}
+        missing_generation: dict[str, object] = {}
 
-        # Step 1: Generate English article
-        article = generate_article(
-            payload, scope, knowledge, system_prompt, article_templates
-        )
-        if not article:
-            logger.warning("Generation failed for: %s", scope.scope_key)
-            counts["blocked"] += 1
-            continue
+        for scope in commodity_scopes:
+            payload = payload_lookup.get(scope.scope_key)
+            if not payload:
+                logger.warning("No analytics for scope: %s", scope.scope_key)
+                counts["blocked"] += 1
+                continue
 
-        # Step 2: Translate (unless skipped)
-        translations = {}
-        if not skip_translate:
-            try:
-                translations = translate_article(article, payload.commodity)
-            except Exception as e:
-                logger.warning("Translation failed for %s: %s", scope.scope_key, e)
-
-        # Step 3: Compute confidence score
-        keywords = build_keywords(payload.commodity, scope.article_type, scope)
-        confidence, status = compute_confidence(article, payload, translations, keywords)
-        counts[status] = counts.get(status, 0) + 1
-
-        # Step 4: Assemble and write English article
-        en_article = assemble_final_article(
-            article, payload, scope, "en", confidence, status, run_id
-        )
-        written_path = write_article_file(en_article)
-
-        # Step 5: Write translated articles
-        for lang_code, translated in translations.items():
-            try:
-                tr_article = assemble_final_article(
-                    article, payload, scope, lang_code, confidence, status, run_id, translated
+            cached_en = _find_cached_output(date, scope.scope_key, "en")
+            if cached_en:
+                article_inputs[scope.scope_key], cached_meta[scope.scope_key] = _load_cached_article_output(
+                    cached_en, payload, scope
                 )
-                write_article_file(tr_article)
-            except Exception as e:
-                logger.warning("Write failed for %s/%s: %s", scope.scope_key, lang_code, e)
+                logger.info("Cache hit: English article %s", scope.scope_key)
+            else:
+                missing_generation[scope.scope_key] = payload
 
-        # Step 6: Store in SQLite
-        try:
-            from schemas import FinalArticleJSON
-            insert_article({
-                "id": f"{scope.scope_key}_{date}_en_{run_id}",
-                "commodity_slug": payload.commodity,
-                "article_date": date,
-                "article_type": scope.article_type,
-                "scope_key": scope.scope_key,
-                "language": "en",
-                "title": article.title,
-                "meta_description": article.meta_description,
-                "body_html": article.body_html,
-                "keywords": json.dumps(article.keywords),
-                "json_ld": json.dumps(en_article.json_ld),
-                "faq_json_ld": json.dumps(en_article.faq_json_ld),
-                "faqs": json.dumps(en_article.faqs),
-                "pre_computed_analytics": payload.model_dump_json(),
-                "confidence_score": confidence,
-                "publish_status": status,
-                "pipeline_run_id": run_id,
-            })
-        except Exception as e:
-            logger.debug("DB insert failed (non-fatal): %s", e)
+        if missing_generation:
+            generated = generate_articles_for_commodity(
+                commodity, date, missing_generation, scope_lookup
+            )
+            article_inputs.update(generated)
 
-        # Rate limiting between articles (respect free-tier RPM)
-        import time as time_mod
-        time_mod.sleep(config.LLM_RETRY_DELAY_SECONDS)
+        for scope_key, article in article_inputs.items():
+            payload = payload_lookup[scope_key]
+            scope = scope_lookup[scope_key]
+
+            missing_langs: list[str] = []
+            translations: dict[str, object] = {}
+            if not skip_translate:
+                for lang_code in config.TRANSLATION_LANGUAGES:
+                    cached_tr = _find_cached_output(date, scope_key, lang_code)
+                    if cached_tr:
+                        logger.info("Cache hit: translation %s/%s", scope_key, lang_code)
+                    else:
+                        missing_langs.append(lang_code)
+
+                if missing_langs:
+                    batch_translations = translate_articles(
+                        commodity,
+                        {scope_key: article},
+                        {scope_key: missing_langs},
+                    )
+                    translations = batch_translations.get(scope_key, {})
+
+            if scope_key in cached_meta:
+                confidence = cached_meta[scope_key]["confidence_score"]
+                status = cached_meta[scope_key]["publish_status"]
+                en_article = None
+            else:
+                keywords = build_keywords(payload.commodity, scope.article_type, scope)
+                confidence, status = compute_confidence(article, payload, translations, keywords)
+                en_article = assemble_final_article(
+                    article, payload, scope, "en", confidence, status, run_id
+                )
+                write_article_file(en_article)
+
+                try:
+                    insert_article({
+                        "id": f"{scope.scope_key}_{date}_en_{run_id}",
+                        "commodity_slug": payload.commodity,
+                        "article_date": date,
+                        "article_type": scope.article_type,
+                        "scope_key": scope.scope_key,
+                        "language": "en",
+                        "title": article.title,
+                        "meta_description": article.meta_description,
+                        "body_html": article.body_html,
+                        "keywords": json.dumps(article.keywords),
+                        "json_ld": json.dumps(en_article.json_ld),
+                        "faq_json_ld": json.dumps(en_article.faq_json_ld),
+                        "faqs": json.dumps(en_article.faqs),
+                        "pre_computed_analytics": payload.model_dump_json(),
+                        "confidence_score": confidence,
+                        "publish_status": status,
+                        "pipeline_run_id": run_id,
+                    })
+                except Exception as e:
+                    logger.debug("DB insert failed (non-fatal): %s", e)
+
+            counts[status] = counts.get(status, 0) + 1
+
+            for lang_code, translated in translations.items():
+                try:
+                    tr_article = assemble_final_article(
+                        article, payload, scope, lang_code, confidence, status, run_id, translated
+                    )
+                    write_article_file(tr_article)
+                except Exception as e:
+                    logger.warning("Write failed for %s/%s: %s", scope.scope_key, lang_code, e)
+
+            if missing_generation:
+                time.sleep(config.LLM_RETRY_DELAY_SECONDS)
 
     return counts.get("published", 0), counts.get("review_required", 0), counts.get("blocked", 0)
 

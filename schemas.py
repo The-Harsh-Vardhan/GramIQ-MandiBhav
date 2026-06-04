@@ -158,6 +158,19 @@ class ArticleOutput(BaseModel):
         return v
 
 
+class ArticleDraft(BaseModel):
+    """Minimal creative payload returned by Gemini before Python assembly."""
+    title: str = Field(min_length=10, max_length=120)
+    body_html: str = Field(min_length=200)
+
+    @field_validator("body_html", mode="after")
+    @classmethod
+    def body_must_contain_html(cls, v: str) -> str:
+        if "<p>" not in v and "<h2>" not in v:
+            raise ValueError("body_html must contain semantic HTML tags (<p> or <h2>)")
+        return v
+
+
 # ---------------------------------------------------------------------------
 # Translation layer
 # ---------------------------------------------------------------------------

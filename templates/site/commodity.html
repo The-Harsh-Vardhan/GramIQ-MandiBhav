@@ -2,20 +2,24 @@
 
 {% block content %}
 
-{# ---- Page Header ---- #}
-<div style="background:var(--bg-white);border-bottom:1px solid var(--border);padding:var(--space-xl) 0">
+{# ============================================================
+   COMMODITY HEADER PANEL
+   ============================================================ #}
+<div class="commodity-header-panel">
   <div class="container">
 
-    {# Breadcrumb #}
+    {# Breadcrumbs #}
     <nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href="{{ base_url }}/">🏠 Home</a>
+      <a href="{{ base_url }}/">Home</a>
       <span class="breadcrumb-sep">›</span>
       <span class="breadcrumb-current">{{ commodity.name }}</span>
     </nav>
 
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-xl);flex-wrap:wrap">
-      <div>
-        <div class="article-tags" style="margin-bottom:var(--space-sm)">
+    <div class="commodity-header-layout">
+      
+      {# Left Info Column #}
+      <div class="commodity-header-info">
+        <div style="display: flex; gap: var(--space-xs); align-items: center; flex-wrap: wrap;">
           <span class="card-tag {{ 'tag-soybean' if commodity.slug == 'soybean' else 'tag-cotton' }}">
             {{ '🌱' if commodity.slug == 'soybean' else '🌾' }} {{ commodity.name }}
           </span>
@@ -24,62 +28,65 @@
           <span class="article-type-badge">{{ lang_label }}</span>
           {% endif %}
         </div>
-        <h1 style="font-size:clamp(1.6rem,3vw,2.4rem);font-weight:800;color:var(--text-primary);margin-bottom:var(--space-sm);letter-spacing:-.02em">
-          {{ commodity.name }} Mandi Bhav — {{ latest_date }}
-        </h1>
-        <p style="color:var(--text-muted);max-width:640px;line-height:1.7">
-          {{ commodity.description }}
-        </p>
+        
+        <h1>{{ commodity.name }} Mandi Bhav — {{ latest_date }}</h1>
+        <p>{{ commodity.description }}</p>
+
+        {# Language Variants #}
+        {% if lang_variants %}
+        <div style="margin-top: var(--space-lg); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">🌐 Read in:</span>
+          {% for v in lang_variants %}
+          <a href="{{ base_url }}{{ v.url }}"
+             class="lang-pill {% if v.code == current_lang %}current{% endif %}"
+             id="lang-switch-{{ v.code }}">{{ v.label }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
 
+      {# Right MSP Badge Column #}
       {% if msp_info %}
-      <div class="msp-badge" style="flex-shrink:0;flex-direction:column;align-items:flex-start">
-        <div class="msp-label">📋 Govt. MSP {{ msp_info.year }}</div>
-        <div class="msp-value">₹{{ "{:,.0f}".format(msp_info.value) }}</div>
-        <div style="font-size:.78rem;color:var(--green-600);font-weight:600">per quintal</div>
+      <div class="msp-badge-box">
+        <div class="msp-badge-label">📋 Govt. MSP {{ msp_info.year }}</div>
+        <div class="msp-badge-val">₹{{ "{:,.0f}".format(msp_info.value) }}</div>
+        <div class="msp-badge-sub">per quintal</div>
       </div>
       {% endif %}
-    </div>
 
-    {# Language Switcher #}
-    {% if lang_variants %}
-    <div style="margin-top:var(--space-lg);display:flex;align-items:center;gap:var(--space-xs);flex-wrap:wrap">
-      <span style="font-size:.8rem;font-weight:600;color:var(--text-muted);margin-right:var(--space-xs)">🌐 Read in:</span>
-      {% for v in lang_variants %}
-      <a href="{{ base_url }}{{ v.url }}"
-         class="lang-pill {% if v.code == current_lang %}current{% endif %}"
-         id="lang-switch-{{ v.code }}">{{ v.label }}</a>
-      {% endfor %}
     </div>
-    {% endif %}
 
   </div>
 </div>
 
-{# ---- Article Groups ---- #}
-<div class="container" style="padding-top:var(--space-xl);padding-bottom:var(--space-3xl)">
+{# ============================================================
+   ARTICLE GROUPS
+   ============================================================ #}
+<div class="container" style="padding-top: var(--space-2xl); padding-bottom: var(--space-3xl);">
   {% for group in article_groups %}
-  <section style="margin-bottom:var(--space-2xl)">
-    <div class="group-heading">
-      📂 {{ group.type_label }}
-    </div>
+  <section style="margin-bottom: var(--space-2xl);">
+    <h2 class="group-heading">📂 {{ group.type_label }}</h2>
+    
     <div class="article-list">
       {% for a in group.articles %}
       <a href="{{ base_url }}{{ a.url }}" class="article-list-item" id="article-{{ loop.index }}-{{ group.type_label | lower | replace(' ', '-') }}">
         <div>
           <div class="article-list-title">{{ a.title }}</div>
-          <div class="article-list-meta" style="margin-top:4px">
-            📅 {{ a.date }}
-            {% if a.scope_label %} · {{ a.scope_label }}{% endif %}
+          <div class="article-list-meta" style="margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span>📅 {{ a.date }}</span>
+            {% if a.scope_label %}
+            <span>•</span>
+            <span>{{ a.scope_label }}</span>
+            {% endif %}
             {% if a.confidence_score %}
-            · <span class="{% if a.confidence_score >= 0.75 %}text-green{% elif a.confidence_score >= 0.4 %}text-gold{% else %}text-down{% endif %}">
-                ●
-              </span>
+            <span>•</span>
+            <span class="confidence-badge {% if a.confidence_score >= 0.75 %}conf-high{% elif a.confidence_score >= 0.4 %}conf-medium{% else %}conf-low{% endif %}">
               {{ (a.confidence_score * 100) | int }}% confidence
+            </span>
             {% endif %}
           </div>
         </div>
-        <span class="article-list-arrow">→</span>
+        <span class="article-list-arrow">➜</span>
       </a>
       {% endfor %}
     </div>
