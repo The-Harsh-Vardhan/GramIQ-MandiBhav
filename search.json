@@ -3,10 +3,30 @@
     "title": "Soybean Mandi Bhav Today: Maharashtra Live Market Price & Analysis",
     "commodity": "soybean",
     "language": "en",
-    "type": "state_market_report",
+    "type": "nagpur_demo",
     "date": "2026-06-05",
-    "url": "/soybean/maharashtra/",
-    "state": "Maharashtra",
-    "scope": "soybean_maharashtra"
+    "url": "/soybean/nagpur/",
+    "state": "Nagpur",
+    "scope": "soybean_nagpur"
+  },
+  {
+    "title": "नागपुर मंडी में आज सोयाबीन का भाव - दैनिक कृषि बाजार भाव और ताजा समाचार",
+    "commodity": "soybean",
+    "language": "hi",
+    "type": "nagpur_demo",
+    "date": "2026-06-05",
+    "url": "/hi/soybean/nagpur/",
+    "state": "Nagpur",
+    "scope": "soybean_nagpur"
+  },
+  {
+    "title": "नागपूर बाजार समितीत आज सोयाबीनचे दर - दैनिक कृषी बाजार भाव आणि ताज्या बातम्या",
+    "commodity": "soybean",
+    "language": "mr",
+    "type": "nagpur_demo",
+    "date": "2026-06-05",
+    "url": "/mr/soybean/nagpur/",
+    "state": "Nagpur",
+    "scope": "soybean_nagpur"
   }
 ]
