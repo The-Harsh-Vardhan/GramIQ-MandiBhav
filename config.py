@@ -78,7 +78,7 @@ SITE_DESCRIPTION: str = (
 # ---------------------------------------------------------------------------
 # Pipeline mode
 # ---------------------------------------------------------------------------
-PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "dev")  # "dev" | "live" | "demo"
+PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "demo")  # "dev" | "live" | "demo"
 DEMO_MODE: bool = (os.environ.get("DEMO_MODE", "false").lower() == "true") or (PIPELINE_MODE == "demo")
 DEBUG_OGD_SCHEMA: bool = os.environ.get("DEBUG_OGD_SCHEMA", "false").lower() == "true"
 quota_exhausted_mode: bool = False
@@ -146,17 +146,14 @@ MIN_MARKETS_FOR_STATE_ARTICLE: int = 2
 TOP_MARKETS_FOR_SPOTLIGHT: int = 2
 
 # GramIQ Call-To-Action footer (appended to every article)
-CTA_FOOTER_HTML: str = """
-<div class="gramiq-cta">
+CTA_FOOTER_HTML: str = """<div class="gramiq-cta">
   <hr/>
   <p><strong>📱 Get Real-Time Mandi Alerts on GramIQ</strong></p>
-  <p>Download the <strong>GramIQ app</strong> for live mandi rates, 
-  price alerts, and personalised market insights delivered directly 
-  to your phone — in your language, at your fingertips.</p>
-  <p><a href="https://gramiq.com/app" target="_blank" rel="noopener">
-  ➤ Download GramIQ App</a></p>
-</div>
-"""
+  <p>
+  Download the GramIQ app for live mandi rates,
+  price alerts and AI-powered market intelligence.
+  </p>
+</div>"""
 
 # ---------------------------------------------------------------------------
 # SEO keyword templates
@@ -226,7 +223,7 @@ SEO_KEYWORDS: dict[str, dict[str, list[str]]] = {
 CONFIDENCE_AUTO_PUBLISH: float = 0.75
 CONFIDENCE_REVIEW_REQUIRED: float = 0.40
 PRICE_ANOMALY_THRESHOLD_PCT: float = 25.0  # Flag if day-over-day change > ±25%
-MIN_WORD_COUNT: int = 200
+MIN_WORD_COUNT: int = 300
 MAX_WORD_COUNT: int = 1000
 VALID_TRANSLATION_LENGTH_RATIO: tuple[float, float] = (0.65, 1.60)
 

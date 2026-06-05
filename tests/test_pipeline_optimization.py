@@ -67,11 +67,21 @@ def test_assemble_article_output_is_deterministic():
 
     article = assemble_article_output(draft, _sample_payload(), scope)
 
-    assert article.title == draft.title
-    assert "Avg modal price" in article.meta_description
-    assert article.keywords
+    assert "Soybean" in article.title
+    assert "Mandi Bhav" in article.title
+    assert 50 <= len(article.title) <= 70
+    assert "Average modal price" in article.meta_description
+    assert 120 <= len(article.meta_description) <= 160
+    
+    # Verify keywords contain all 6 required terms
+    required_kws = {"Soybean", "India", "Mandi", "Price", "Bhav", "Market"}
+    article_kws_lower = {kw.lower() for kw in article.keywords}
+    for req in required_kws:
+        assert req.lower() in article_kws_lower
+        
+    assert "gramiq-cta" in article.body_html
     assert len(article.market_summary_table) == 1
-    assert len(article.faqs) >= 2
+    assert len(article.faqs) >= 3
 
 
 def test_write_article_file_uses_unique_review_filename():

@@ -146,25 +146,95 @@ def _compact_payload(payload: AnalyticsPayload) -> dict:
     return compact
 
 
+def _get_formatted_writing_template(payload: AnalyticsPayload, templates: dict) -> str:
+    """Format the writing template from article_types.json with payload variables."""
+    atype = payload.article_type
+    template_config = templates.get(atype)
+    if not template_config:
+        return "Write a comprehensive market report using the provided data."
+
+    template_str = template_config.get("template", "")
+    word_target = template_config.get("word_target", "450-700")
+
+    scope = ScopeTarget(
+        commodity=payload.commodity,
+        article_type=payload.article_type,
+        scope_key=payload.scope_key,
+        scope_label=payload.scope_label,
+        state=payload.state,
+        market=payload.market,
+    )
+    kws = build_keywords(payload.commodity, atype, scope)
+    keywords_str = ", ".join(kws)
+
+    fmt_dict = {
+        "commodity": payload.commodity.title(),
+        "date": payload.date,
+        "word_target": word_target,
+        "keywords": keywords_str,
+        "state": payload.state or "India",
+        "market_name": payload.market or "",
+        "national_avg_modal": f"{payload.national_avg_modal:,.0f}",
+        "national_total_arrivals": f"{payload.national_total_arrivals:,.0f}",
+        "market_count": str(payload.market_count),
+    }
+
+    state_avg_modal = f"{payload.national_avg_modal:,.0f}"
+    state_total_arrivals = f"{payload.national_total_arrivals:,.0f}"
+    if payload.state_summaries:
+        ss = payload.state_summaries[0]
+        state_avg_modal = f"{ss.avg_modal_price:,.0f}"
+        state_total_arrivals = f"{ss.total_arrivals:,.0f}"
+
+    fmt_dict["state_avg_modal"] = state_avg_modal
+    fmt_dict["state_total_arrivals"] = state_total_arrivals
+
+    fmt_dict["msp_current_year"] = f"{payload.msp_current_year:,.0f}" if payload.msp_current_year else "N/A"
+
+    price_vs_msp_pct_str = f"{payload.price_vs_msp_pct:.1f}" if payload.price_vs_msp_pct else "0.0"
+    price_vs_msp_dir_str = payload.price_vs_msp_direction or "aligned with"
+
+    fmt_dict["price_vs_msp_pct"] = price_vs_msp_pct_str
+    fmt_dict["price_vs_msp_direction"] = price_vs_msp_dir_str
+
+    fmt_dict["season_phase"] = payload.season_phase or "regular"
+    fmt_dict["season_note"] = payload.season_note or "Normal seasonal flow."
+
+    class SafeDict(dict):
+        def __missing__(self, key):
+            return f"{{{key}}}"
+
+    return template_str.format_map(SafeDict(fmt_dict))
+
+
 def _build_batch_prompt(
     commodity: str,
     date: str,
     scope_payloads: dict[str, AnalyticsPayload],
 ) -> str:
-    """Build a concise commodity-level generation prompt."""
+    """Build a detailed commodity-level generation prompt using custom templates."""
+    templates = config.load_article_type_templates()
+    scopes_data = []
+
+    for payload in scope_payloads.values():
+        compact = _compact_payload(payload)
+        compact["writing_instructions"] = _get_formatted_writing_template(payload, templates)
+        scopes_data.append(compact)
+
     instructions = {
         "commodity": commodity,
         "date": date,
         "task": (
-            "Write one English article per scope. Use only the supplied analytics. "
-            "Each article must be 220-450 words of clean HTML with <h2>, <h3>, <p>, "
-            "<table>, <tr>, <th>, <td>, and <strong> where useful."
+            "Write one detailed English article for each scope in the 'scopes' list. "
+            "Follow the 'writing_instructions' provided for each scope exactly. "
+            "Each article must be between 400 and 700 words of clean HTML. "
+            "Write high-quality agricultural journalism with deep farmer-centric analysis."
         ),
         "article_rules": [
-            "Keep all numbers exact.",
-            "No markdown.",
-            "Mention MSP or seasonal context only when present in analytics.",
-            "Do not add FAQs, SEO metadata, keywords, or JSON-LD.",
+            "Keep all numbers exact and grounded in the provided data.",
+            "No markdown outside HTML tags. Use semantic HTML (<h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <strong>).",
+            "Ensure the article body includes all the required sections from the writing_instructions.",
+            "Do not add FAQs, SEO metadata, keywords, or JSON-LD in the response body.",
         ],
         "output_schema": {
             "articles": [
@@ -175,7 +245,7 @@ def _build_batch_prompt(
                 }
             ]
         },
-        "scopes": [_compact_payload(payload) for payload in scope_payloads.values()],
+        "scopes": scopes_data,
     }
     return json.dumps(instructions, ensure_ascii=False)
 

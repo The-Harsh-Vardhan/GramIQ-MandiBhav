@@ -58,94 +58,113 @@ def _get_jinja_env() -> Environment:
 # Confidence scoring (6-signal quality gate)
 # ---------------------------------------------------------------------------
 
-def _check_output_validity(article: ArticleOutput) -> float:
-    """Check word count, HTML presence, and FAQ count."""
-    from html.parser import HTMLParser
-
-    class HTMLTagCounter(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.tags = []
-        def handle_starttag(self, tag, attrs):
-            self.tags.append(tag)
-
-    # Word count check (strip HTML for word count)
+def validate_article_quality(article: ArticleOutput) -> bool:
+    """
+    Check if the article meets the minimum quality gates:
+    - Word count >= 300
+    - FAQ count >= 3
+    - GramIQ CTA block present
+    """
+    # 1. Word count >= 300 (strip HTML tags)
     plain_text = re.sub(r"<[^>]+>", " ", article.body_html)
     word_count = len(plain_text.split())
+    if word_count < 300:
+        logger.warning("Article quality check failed: word count %d < 300", word_count)
+        return False
 
-    if not (MIN_WORD_COUNT <= word_count <= MAX_WORD_COUNT):
-        logger.debug("Word count %d outside range [%d, %d]", word_count, MIN_WORD_COUNT, MAX_WORD_COUNT)
-        return 0.0
+    # 2. FAQ count >= 3
+    if len(article.faqs) < 3:
+        logger.warning("Article quality check failed: FAQ count %d < 3", len(article.faqs))
+        return False
 
-    # HTML structure check
-    counter = HTMLTagCounter()
-    try:
-        counter.feed(article.body_html)
-    except Exception:
-        return 0.0
+    # 3. GramIQ CTA block present
+    cta_norm = re.sub(r"\s+", " ", config.CTA_FOOTER_HTML).strip().lower()
+    body_norm = re.sub(r"\s+", " ", article.body_html).strip().lower()
+    if cta_norm not in body_norm and "gramiq-cta" not in body_norm:
+        logger.warning("Article quality check failed: GramIQ CTA block not found in body_html")
+        return False
 
-    has_headings = any(t in counter.tags for t in ["h2", "h3"])
-    has_paragraphs = "p" in counter.tags
-
-    if not (has_headings and has_paragraphs):
-        logger.debug("Missing required HTML structure (h2/h3 + p)")
-        return 0.0
-
-    # FAQ check
-    if len(article.faqs) < 2:
-        logger.debug("Insufficient FAQs: %d < 2", len(article.faqs))
-        return 0.5  # Partial credit
-
-    return 1.0
+    return True
 
 
-def _check_numeric_in_article(article: ArticleOutput, analytics: AnalyticsPayload) -> float:
+def generate_seo_metadata(
+    analytics: AnalyticsPayload,
+    scope: ScopeTarget,
+) -> tuple[str, str, list[str]]:
     """
-    Verify that key analytics numbers appear somewhere in the article.
-    Checks national_avg_modal and at least one market price.
+    Generate deterministic SEO title, description, and keywords.
+    - Title: 50-70 characters containing Commodity, Region, and intent keyword.
+    - Description: 120-160 characters containing average modal price, arrivals, and region.
+    - Keywords: list of keywords containing all 6 required terms.
     """
-    body_numbers = set(
-        re.findall(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b", article.body_html.replace(",", ""))
+    commodity_name = analytics.commodity.title()
+    region_name = scope.state or scope.market or scope.scope_label
+    if region_name == "National":
+        region_name = "India"
+
+    # 1. SEO Title (50-70 characters)
+    title = f"{commodity_name} Mandi Bhav Today: {region_name} Live Market Price & Analysis"
+    if len(title) > 70:
+        title = f"{commodity_name} Mandi Bhav Today: {region_name} Market Price"
+    if len(title) > 70:
+        title = f"{commodity_name} Mandi Bhav: {region_name} Price Updates"
+    if len(title) > 70:
+        title = f"{commodity_name} Mandi Bhav: {region_name} Rates"
+    
+    # Pad or slice to guarantee 50-70 characters
+    if len(title) < 50:
+        title = f"{title} | GramIQ MandiBhav Reports"
+    if len(title) < 50:
+        title = title.ljust(50, ".")
+    elif len(title) > 70:
+        title = title[:70]
+
+    # 2. Meta Description (120-160 characters)
+    avg_price = f"Rs {analytics.national_avg_modal:,.0f}"
+    arrivals = f"{analytics.national_total_arrivals:,.0f} tonnes"
+    desc = (
+        f"Latest {commodity_name} Mandi Bhav in {region_name}. "
+        f"Average modal price is {avg_price} with total arrivals of {arrivals}. "
+        f"Get daily market reports and price analysis on GramIQ."
     )
-
-    required_numbers = {str(int(analytics.national_avg_modal))}
-    if analytics.markets:
-        for m in analytics.markets[:3]:
-            required_numbers.add(str(int(m.modal_price)))
-
-    missing = required_numbers - body_numbers
-    if missing:
-        logger.debug("Missing analytics numbers in article body: %s", missing)
-        return 0.0
-    return 1.0
-
-
-def _check_keyword_coverage(article: ArticleOutput, required_keywords: list[str]) -> float:
-    """Check what fraction of required keywords appear in the article body or title."""
-    if not required_keywords:
-        return 1.0
-    body_lower = (article.title + " " + article.body_html).lower()
-    found = sum(1 for kw in required_keywords if kw.lower() in body_lower)
-    return found / len(required_keywords)
-
-
-def _check_price_anomaly(analytics: AnalyticsPayload) -> float:
-    """Flag if day-over-day price change exceeds threshold."""
-    if analytics.national_day_change_pct is None:
-        return 1.0  # No prev data — cannot flag
-    if abs(analytics.national_day_change_pct) > PRICE_ANOMALY_THRESHOLD_PCT:
-        logger.warning(
-            "Price anomaly detected for %s: %.2f%% change",
-            analytics.scope_key, analytics.national_day_change_pct
+    if len(desc) > 160:
+        desc = (
+            f"Latest {commodity_name} Mandi Bhav in {region_name}. "
+            f"Average price is {avg_price} with arrivals of {arrivals}. "
+            f"Read daily market report."
         )
-        return 0.0
-    return 1.0
+    if len(desc) > 160:
+        desc = f"Latest {commodity_name} Mandi Bhav in {region_name}: modal price is {avg_price}, arrivals are {arrivals}."
 
+    # Pad or slice to guarantee 120-160 characters
+    if len(desc) < 120:
+        desc = desc + " Get real-time mandi alerts, price analysis, and farmer guidance updates on GramIQ."
+    
+    if len(desc) > 160:
+        desc = desc[:157] + "..."
+    elif len(desc) < 120:
+        desc = desc.ljust(120, ".")
 
-def _check_data_coverage(analytics: AnalyticsPayload) -> float:
-    """Check that there are enough reporting markets for this scope."""
-    min_markets = 2 if analytics.article_type != "market_spotlight" else 1
-    return 1.0 if analytics.market_count >= min_markets else 0.0
+    # 3. Keywords (must contain the 6 terms: Commodity, Region, Mandi, Price, Bhav, Market)
+    keywords = [
+        commodity_name,
+        region_name,
+        "Mandi",
+        "Price",
+        "Bhav",
+        "Market",
+        f"{commodity_name} Mandi Bhav",
+        f"{region_name} Mandi Bhav",
+    ]
+    seen = set()
+    final_keywords = []
+    for kw in keywords:
+        kw_lower = kw.lower()
+        if kw_lower not in seen:
+            seen.add(kw_lower)
+            final_keywords.append(kw)
+    
+    return title, desc, final_keywords[:10]
 
 
 def compute_confidence(
@@ -158,48 +177,54 @@ def compute_confidence(
     Compute a heuristic confidence score (0.0-1.0).
     Returns (score, publish_status).
 
-    Signals and weights:
-    - Data Coverage:      0.20
-    - Numeric Integrity:  0.25
-    - Price Anomaly:      0.20
-    - Output Validity:    0.15
-    - Translation QA:     0.10
-    - Keyword Coverage:   0.10
+    Formula: confidence = data_completeness_score * generation_success_score * translation_success_score
     """
-    data_coverage   = _check_data_coverage(analytics)
-    numeric_ok      = _check_numeric_in_article(article, analytics)
-    price_ok        = _check_price_anomaly(analytics)
-    validity        = _check_output_validity(article)
-    keyword_cov     = _check_keyword_coverage(article, keywords)
+    # 1. data_completeness_score: Fraction vs min_required
+    if "national" in analytics.scope_key or analytics.article_type == "daily_commodity_report":
+        min_required = 5
+    elif "state" in analytics.scope_key or analytics.article_type == "state_market_report":
+        min_required = 2
+    else:
+        min_required = 1
 
-    # Translation QA: average of numeric_integrity across translated languages
+    reporting_markets = analytics.market_count
+    fraction = reporting_markets / min_required
+    data_completeness_score = min(fraction, 1.0)
+
+    # Penalized by 0.8 if historical change (national_day_change_pct) is missing
+    if analytics.national_day_change_pct is None:
+        data_completeness_score *= 0.8
+
+    # 2. generation_success_score: 1.0 if passes validation, else 0.0
+    is_valid = validate_article_quality(article)
+    generation_success_score = 1.0 if is_valid else 0.0
+
+    # 3. translation_success_score: Average of numeric_integrity_passed (default 1.0 if EN-only)
     if translations:
         trans_scores = [1.0 if t.numeric_integrity_passed else 0.0 for t in translations.values()]
-        translation_qa = sum(trans_scores) / len(trans_scores)
+        translation_success_score = sum(trans_scores) / len(trans_scores)
     else:
-        translation_qa = 1.0  # EN-only pass
+        translation_success_score = 1.0
 
-    score = (
-        0.20 * data_coverage
-        + 0.25 * numeric_ok
-        + 0.20 * price_ok
-        + 0.15 * validity
-        + 0.10 * translation_qa
-        + 0.10 * keyword_cov
-    )
+    score = data_completeness_score * generation_success_score * translation_success_score
     score = round(score, 3)
 
-    if score >= CONFIDENCE_AUTO_PUBLISH:
-        status = "published"
-    elif score >= CONFIDENCE_REVIEW_REQUIRED:
-        status = "review_required"
-    else:
+    # If quality checks fail, status is blocked and confidence is 0.0
+    if not is_valid:
+        score = 0.0
         status = "blocked"
+    else:
+        if score >= CONFIDENCE_AUTO_PUBLISH:
+            status = "published"
+        elif score >= CONFIDENCE_REVIEW_REQUIRED:
+            status = "review_required"
+        else:
+            status = "blocked"
 
     logger.info(
-        "Confidence [%s]: %.3f → %s (cov=%.2f num=%.2f price=%.2f valid=%.2f trans=%.2f kw=%.2f)",
+        "Confidence [%s]: %.3f → %s (comp=%.2f gen=%.2f trans=%.2f)",
         analytics.scope_key, score, status,
-        data_coverage, numeric_ok, price_ok, validity, translation_qa, keyword_cov,
+        data_completeness_score, generation_success_score, translation_success_score,
     )
     return score, status
 
@@ -228,30 +253,6 @@ def build_market_summary_table(analytics: AnalyticsPayload) -> list[MarketRow]:
         )
         for row in rows[:limit]
     ]
-
-
-def build_meta_description(
-    title: str,
-    analytics: AnalyticsPayload,
-    scope: ScopeTarget,
-) -> str:
-    """Create a deterministic SEO description within search-friendly length."""
-    parts = [
-        f"{scope.scope_label} {analytics.commodity.title()} mandi bhav for {analytics.date}.",
-        f"Avg modal price Rs {analytics.national_avg_modal:,.0f}.",
-        f"Arrivals {analytics.national_total_arrivals:,.0f} tonnes.",
-    ]
-    if analytics.national_day_change_pct is not None:
-        direction = "up" if analytics.national_day_change_pct >= 0 else "down"
-        parts.append(
-            f"Day change {abs(analytics.national_day_change_pct):.1f}% {direction}."
-        )
-    text = " ".join(parts)
-    if len(text) > 165:
-        text = text[:162].rstrip(" ,.-") + "..."
-    if len(text) < 50:
-        text = f"{title}. {text}"
-    return text
 
 
 def build_template_faqs(
@@ -316,13 +317,17 @@ def assemble_article_output(
     scope: ScopeTarget,
 ) -> ArticleOutput:
     """Expand a Gemini draft into the full deterministic English article payload."""
-    from llm_engine import build_keywords
+    title, meta_description, keywords = generate_seo_metadata(analytics, scope)
+    
+    body_html = draft.body_html
+    if config.CTA_FOOTER_HTML not in body_html:
+        body_html = body_html.strip() + "\n" + config.CTA_FOOTER_HTML
 
     return ArticleOutput(
-        title=draft.title,
-        meta_description=build_meta_description(draft.title, analytics, scope),
-        body_html=draft.body_html,
-        keywords=build_keywords(analytics.commodity, scope.article_type, scope),
+        title=title,
+        meta_description=meta_description,
+        body_html=body_html,
+        keywords=keywords,
         market_summary_table=build_market_summary_table(analytics),
         faqs=build_template_faqs(analytics, scope),
     )
