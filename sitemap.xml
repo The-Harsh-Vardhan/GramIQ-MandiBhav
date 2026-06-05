@@ -56,6 +56,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>/soybean/telangana/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>/gu/soybean/maharashtra/</loc>
     <lastmod>2026-06-05</lastmod>
     <changefreq>daily</changefreq>
