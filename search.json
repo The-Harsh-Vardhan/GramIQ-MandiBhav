@@ -1,32 +1,42 @@
 [
   {
-    "title": "Soybean Mandi Bhav Telangana Today: Prices Hold Firm Amidst Sowing Season, June 4, 2026",
+    "title": "Soybean Prices in Maharashtra Stay Firm Today",
     "commodity": "soybean",
     "language": "en",
     "type": "state_market_report",
-    "date": "2026-06-04",
-    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/telangana/",
-    "state": "Telangana",
-    "scope": "soybean_telangana"
+    "date": "2026-06-05",
+    "url": "/soybean/maharashtra/",
+    "state": "Maharashtra",
+    "scope": "soybean_maharashtra"
   },
   {
-    "title": "સોયાબીન મંડી ભાવ તેલંગાણા આજે: વાવણીની મોસમ",
+    "title": "મહારાષ્ટ્રમાં સોયાબીનના ભાવ આજે સ્થિર રહ્યા",
     "commodity": "soybean",
     "language": "gu",
     "type": "state_market_report",
-    "date": "2026-06-04",
-    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/gu/soybean/telangana/",
-    "state": "Telangana",
-    "scope": "soybean_telangana"
+    "date": "2026-06-05",
+    "url": "/gu/soybean/maharashtra/",
+    "state": "Maharashtra",
+    "scope": "soybean_maharashtra"
   },
   {
-    "title": "सोयाबीन Mandi Bhav तेलंगाना आज: बुवाई के मौसम के बीच कीमतें स्थिर बनी हुई हैं,",
+    "title": "महाराष्ट्र में सोयाबीन के दाम आज स्थिर रहे",
     "commodity": "soybean",
     "language": "hi",
     "type": "state_market_report",
-    "date": "2026-06-04",
-    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/hi/soybean/telangana/",
-    "state": "Telangana",
-    "scope": "soybean_telangana"
+    "date": "2026-06-05",
+    "url": "/hi/soybean/maharashtra/",
+    "state": "Maharashtra",
+    "scope": "soybean_maharashtra"
+  },
+  {
+    "title": "महाराष्ट्रामध्ये सोयाबीनचे दर आज स्थिर राहिले",
+    "commodity": "soybean",
+    "language": "mr",
+    "type": "state_market_report",
+    "date": "2026-06-05",
+    "url": "/mr/soybean/maharashtra/",
+    "state": "Maharashtra",
+    "scope": "soybean_maharashtra"
   }
 ]

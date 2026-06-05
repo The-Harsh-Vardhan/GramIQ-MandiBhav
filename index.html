@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="site-base-url" content="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav">
+  <meta name="site-base-url" content="">
 
   <title>Mandi Bhav Today — Soybean &amp; Cotton Prices | MandiBhav by GramIQ</title>
   <meta name="description" content="Daily soybean and cotton mandi price reports in English, Hindi, Marathi and Gujarati — powered by government data and AI.">
@@ -12,13 +12,13 @@
   <meta name="robots" content="index, follow">
   <meta name="language" content="en">
 
-  <link rel="canonical" href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/">
-  <link rel="alternate" hreflang="x-default" href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/">
+  <link rel="canonical" href="/">
+  <link rel="alternate" hreflang="x-default" href="/">
 
   <meta property="og:type" content="article">
   <meta property="og:title" content="MandiBhav by GramIQ — Daily Mandi Prices in 4 Languages">
   <meta property="og:description" content="Daily soybean and cotton mandi price reports in English, Hindi, Marathi and Gujarati — powered by government data and AI.">
-  <meta property="og:url" content="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/">
+  <meta property="og:url" content="/">
   <meta property="og:site_name" content="MandiBhav by GramIQ">
   <meta property="og:locale" content="en_IN">
 
@@ -27,7 +27,7 @@
   <meta name="twitter:description" content="Daily soybean and cotton mandi price reports in English, Hindi, Marathi and Gujarati — powered by government data and AI.">
 
   <link rel="alternate" type="application/rss+xml" title="MandiBhav by GramIQ — Latest Prices"
-        href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/rss.xml">
+        href="/rss.xml">
 
 
   <script type="application/ld+json">
@@ -35,40 +35,63 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GramIQ",
-    "url": "https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/",
+    "url": "/",
     "description": "AI-powered agricultural market intelligence for Indian farmers"
   }
   </script>
 
 
-  <link rel="stylesheet" href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/assets/style.css">
+  <link rel="stylesheet" href="/assets/style.css">
+
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,hi,mr,gu,pa,kn,ta,te,bn,ml,or,as,ur',
+        autoDisplay: false
+      }, 'google_translate_element');
+    }
+
+    function translateLanguage(langCode) {
+      var select = document.querySelector('.goog-te-combo');
+      if (select) {
+        select.value = langCode;
+        select.dispatchEvent(new Event('change'));
+      }
+    }
+  </script>
+  <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </head>
 <body>
 
+<div class="header-announce">
+  Free daily mandi bhav reports — सोयाबीन · कपास — 4 भाषाओं में &nbsp;|&nbsp;
+  <a href="/rss.xml">Subscribe via RSS</a>
+</div>
+
 <header class="navbar">
   <div class="container">
-    <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/" class="navbar-brand">
-      <div class="brand-logo">🌾</div>
-      <div>
-        MandiBhav
-        <div class="brand-sub">by GramIQ</div>
+    <a href="/" class="navbar-brand" id="site-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 4px;">
+        <path d="M12 2C12 2 17 7.5 17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 7.5 12 2 12 2Z" fill="#273A29"/>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12H2C2 17.5228 6.47715 22 12 22Z" fill="#273A29"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">MandiBhav</span>
+        <span class="brand-sub">by GramIQ</span>
       </div>
     </a>
 
-    <nav aria-label="Main navigation">
+    <nav aria-label="Main navigation" id="main-nav">
       <ul class="navbar-nav">
-        <li><a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/" class="active">Home</a></li>
-        <li><a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/" >Soybean</a></li>
-        <li><a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/cotton/" >Cotton</a></li>
-        <li><a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/rss.xml">RSS</a></li>
+        <li><a href="/" class="active" id="nav-home">Home</a></li>
+        <li><a href="/soybean/"  id="nav-soybean">Soybean</a></li>
+        <li><a href="/cotton/"  id="nav-cotton">Cotton</a></li>
       </ul>
     </nav>
 
-    <div class="lang-switcher" aria-label="Language switcher">
-        <span class="lang-pill current">EN</span>
-        <span class="lang-pill ">हि</span>
-        <span class="lang-pill ">म</span>
-        <span class="lang-pill ">ગુ</span>
+    <div class="lang-switcher" aria-label="Language switcher" id="lang-switcher">
+      <div id="google_translate_element"></div>
     </div>
   </div>
 </header>
@@ -77,43 +100,217 @@
 
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">Live Daily Updates</div>
-    <h1>India's Mandi Prices,<br>In Your Language</h1>
-    <p class="hero-sub">
-      Soybean &amp; Cotton rates across India — today's government market data,
-      analyzed by AI, published in English, Hindi, Marathi &amp; Gujarati.
-    </p>
+    
+    <div class="hero-content">
+      <div class="hero-tag">Live Daily Updates</div>
+      <h1>AI-Powered Agricultural<br><span>Market Intelligence</span></h1>
+      <p class="hero-sub">
+        Daily Mandi rates, market insights, and price trends across India — in your language. Sourced directly from verified government APMC databases.
+      </p>
 
-    <div class="search-wrapper">
-      <span class="search-icon" aria-hidden="true">🔍</span>
-      <input
-        id="search-input"
-        class="search-input"
-        type="search"
-        placeholder="Search markets, states, commodities..."
-        autocomplete="off"
-        aria-label="Search articles"
-      >
+      <div class="hero-actions">
+        <a href="/soybean/" class="btn-primary">Soybean Prices</a>
+        <a href="/cotton/" class="btn-outline">Cotton Prices</a>
+      </div>
+
+      <div class="search-wrapper">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="Search markets, states, crops..."
+          autocomplete="off"
+          aria-label="Search reports"
+        >
+        <div id="search-results" role="region" aria-live="polite"></div>
+      </div>
+
+      <div class="hero-stats">
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">1</span>
+          <span class="hero-stat-lbl">Reports Today</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">4</span>
+          <span class="hero-stat-lbl">Languages</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">0</span>
+          <span class="hero-stat-lbl">Markets Covered</span>
+        </div>
+      </div>
     </div>
-    <div id="search-results" role="region" aria-live="polite"></div>
 
-    <div class="hero-stats">
-      <div class="hero-stat">
-        <span class="hero-stat-value">1</span>
-        <span class="hero-stat-label">Articles Today</span>
+    <div class="hero-visual">
+      <div class="whatsapp-mockup">
+        <div class="wa-header">
+          <div class="wa-avatar">G</div>
+          <div class="wa-status">
+            <span class="wa-name">GramIQ Mandi Prices</span>
+            <span class="wa-online">online</span>
+          </div>
+        </div>
+        <div class="wa-chat-area">
+          <div class="wa-bubble incoming">
+            <div class="wa-bubble-title">GramIQ Mandi Service</div>
+            Pehle bhav jano, phir becho! Welcome to MandiBhav by GramIQ.
+            <br><br>
+            Please choose a crop below to get today's average rates directly:
+            <div class="wa-time">09:15 AM</div>
+          </div>
+          
+          <div class="wa-bubble outgoing">
+            Soybean rates
+            <div class="wa-time">09:16 AM</div>
+          </div>
+
+          <div class="wa-bubble incoming">
+            <div class="wa-bubble-title">Soybean Daily Report</div>
+            <strong>Today's Soybean Rates</strong>
+            <br><br>
+            • Maharashtra: ₹5,850 - ₹6,200/q
+            <br>
+            • Madhya Pradesh: ₹5,700 - ₹6,050/q
+            <br>
+            • Peak Market: Washim (₹6,300/q)
+            <br><br>
+            Reply with state name for detailed market price breakdown.
+            
+            <div class="wa-buttons">
+              <span class="wa-btn">Maharashtra Details</span>
+              <span class="wa-btn">Madhya Pradesh Details</span>
+              <span class="wa-btn">Main Menu</span>
+            </div>
+            <div class="wa-time">09:16 AM</div>
+          </div>
+        </div>
       </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">4</span>
-        <span class="hero-stat-label">Languages</span>
+    </div>
+
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Choose Your Crop</h2>
+      <p>Select a crop below to view daily average pricing, historical comparison, and district-wise details</p>
+    </div>
+    
+    <div class="commodity-grid">
+      <div class="commodity-card soybean">
+        <div class="commodity-card-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22V12M12 12c0-3.3-2.7-6-6-6M12 14c0-3.3 2.7-6 6-6"/>
+          </svg>
+        </div>
+        <h3>Soybean</h3>
+        <p class="commodity-card-desc">
+          Get latest APMC market prices, modal averages, and state-wise reports.
+        </p>
+        <div class="commodity-card-meta">
+          <strong>1</strong> reports generated today in <strong>4</strong> languages.
+        </div>
+        <div class="commodity-card-msp">
+          Govt. MSP 2025-26: ₹4,892/quintal
+        </div>
+        <a href="/soybean/" class="btn-primary">
+          View Soybean Reports →
+        </a>
       </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">0</span>
-        <span class="hero-stat-label">Markets Covered</span>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top: 0;">
+  <div class="container">
+    <div class="section-header" style="text-align: left; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div>
+        <h2>Today's Top Reports</h2>
+        <p style="margin-top: 4px;">Recently generated market bulletins and local updates</p>
       </div>
-      <div class="hero-stat">
-        <span class="hero-stat-value">2026-06-04</span>
-        <span class="hero-stat-label">Last Updated</span>
+      <a href="/soybean/" class="btn-outline" style="padding: 8px 18px; font-size: 0.85rem;">All Reports →</a>
+    </div>
+
+    <div class="article-grid">
+      <div class="article-card">
+        <div class="article-card-header">
+          <span class="card-tag tag-soybean">
+            Soybean
+          </span>
+          <h3 class="article-card-title">Soybean Prices in Maharashtra Stay Firm Today</h3>
+        </div>
+        <div class="article-card-meta">
+          <span>2026-06-05</span>
+          <span>•</span>
+          <span>State Market Report</span>
+        </div>
+        <a href="/soybean/maharashtra/" class="article-card-footer">
+          <span>Read Full Report</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section features-section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Why Indian Farmers Trust GramIQ</h2>
+      <p>Empowering agricultural decision-making with verified, fast intelligence</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </div>
+        <h3>Price Advantage</h3>
+        <p>Know current local mandi modal averages before committing to sales and avoid under-selling produce.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <h3>Negotiate Confidently</h3>
+        <p>Empower yourself with official government APMC benchmarks to negotiate best prices with commission agents and buyers.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+          </svg>
+        </div>
+        <h3>Right-Time Selling</h3>
+        <p>Monitor market arrivals and price changes over time to decide the most profitable week to sell.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="border-top: 1px solid var(--border); background-color: var(--bg-secondary);">
+  <div class="container" style="text-align: center;">
+    <div class="section-header">
+      <h2>Available In Your Language</h2>
+      <p>Select your language below to instantly translate all market price updates</p>
+    </div>
+    
+    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; max-width: 800px; margin: 0 auto;">
+      <button class="lang-pill" onclick="translateLanguage('en')">English</button>
+      <button class="lang-pill" onclick="translateLanguage('hi')">हिंदी</button>
+      <button class="lang-pill" onclick="translateLanguage('mr')">मराठी</button>
+      <button class="lang-pill" onclick="translateLanguage('gu')">ગુજરાતી</button>
+      <button class="lang-pill" onclick="translateLanguage('pa')">ਪੰਜਾਬੀ</button>
+      <button class="lang-pill" onclick="translateLanguage('kn')">ಕನ್ನಡ</button>
+      <button class="lang-pill" onclick="translateLanguage('ta')">தமிழ்</button>
+      <button class="lang-pill" onclick="translateLanguage('te')">తెలుగు</button>
+      <button class="lang-pill" onclick="translateLanguage('bn')">বাংলা</button>
     </div>
   </div>
 </section>
@@ -121,67 +318,31 @@
 <section class="section">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title">Commodities</h2>
-      <span class="text-muted" style="font-size:.85rem">Click to explore reports</span>
+      <h2>Frequently Asked Questions</h2>
+      <p>Have questions about how we compile mandi rates? Check details below</p>
     </div>
-    <div class="commodity-cards">
-      <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/" class="commodity-card">
-        <span class="commodity-icon">🌱</span>
-        <div class="commodity-name">Soybean</div>
-        <div class="commodity-count">1 reports today in 3 languages</div>
-        <div class="commodity-msp">MSP 2025-26: ₹4,892/quintal</div>
-      </a>
-    </div>
-  </div>
-</section>
 
-<section class="section" style="padding-top:0">
-  <div class="container">
-    <div class="section-header">
-      <h2 class="section-title">Latest Reports</h2>
-      <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/" class="section-link">View all →</a>
-    </div>
-    <div class="cards-grid">
-      <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhavhttps://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/telangana/" class="card">
-        <span class="card-tag tag-soybean">
-          SOYBEAN
-        </span>
-        <div class="card-title">Soybean Mandi Bhav Telangana Today: Prices Hold Firm Amidst Sowing Season, June 4, 2026</div>
-        <div class="card-meta">
-          <span>2026-06-04</span>
-          <span class="card-meta-sep">·</span>
-          <span>State Market Report</span>
+    <div class="faq-container">
+      <details class="faq-details">
+        <summary class="faq-summary">How do I get mandi prices from GramIQ?</summary>
+        <div class="faq-content">
+          You can get daily rates by checking this site, subscribing to our RSS feeds, or subscribing directly via WhatsApp to receive automatic notifications whenever rates are updated.
         </div>
-        <div class="card-arrow">Read report →</div>
-      </a>
-    </div>
-  </div>
-</section>
+      </details>
+      
+      <details class="faq-details">
+        <summary class="faq-summary">Where does this price data come from?</summary>
+        <div class="faq-content">
+          All prices are sourced from data.gov.in (the Open Government Data Portal of India), which aggregates official reports directly submitted by APMC mandis across India.
+        </div>
+      </details>
 
-<section class="section" style="background:var(--bg-surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
-  <div class="container">
-    <h2 class="section-title" style="text-align:center;margin-bottom:var(--space-2xl)">How MandiBhav Works</h2>
-    <div class="cards-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
-      <div class="card" style="cursor:default">
-        <div style="font-size:2rem;margin-bottom:var(--space-md)">📡</div>
-        <div class="card-title">Live Government Data</div>
-        <div class="card-meta" style="display:block;margin-top:var(--space-sm)">Prices fetched from data.gov.in OGD API — the official Indian government market data portal</div>
-      </div>
-      <div class="card" style="cursor:default">
-        <div style="font-size:2rem;margin-bottom:var(--space-md)">📊</div>
-        <div class="card-title">Pre-computed Analytics</div>
-        <div class="card-meta" style="display:block;margin-top:var(--space-sm)">Day-over-day changes, state rankings, top gainers &amp;amp; losers — all computed before the AI sees the data</div>
-      </div>
-      <div class="card" style="cursor:default">
-        <div style="font-size:2rem;margin-bottom:var(--space-md)">🤖</div>
-        <div class="card-title">AI Article Generation</div>
-        <div class="card-meta" style="display:block;margin-top:var(--space-sm)">Gemini generates structured articles grounded in real data, injecting MSP context, seasonal phases, and market significance</div>
-      </div>
-      <div class="card" style="cursor:default">
-        <div style="font-size:2rem;margin-bottom:var(--space-md)">🌐</div>
-        <div class="card-title">Multilingual Publishing</div>
-        <div class="card-meta" style="display:block;margin-top:var(--space-sm)">Every article published in English, Hindi, Marathi, and Gujarati with HTML-preserving translation and numeric QA</div>
-      </div>
+      <details class="faq-details">
+        <summary class="faq-summary">Are these prices official buy rates?</summary>
+        <div class="faq-content">
+          No, these rates are indicative average modal rates for the day. Local grading, quality parameters, moisture content, and market conditions will influence final quotes. Always verify locally before transaction.
+        </div>
+      </details>
     </div>
   </div>
 </section>
@@ -190,37 +351,40 @@
 
 <footer class="footer">
   <div class="container">
-    <div class="footer-inner">
-      <div>
-        <div class="footer-brand-name">🌾 MandiBhav by GramIQ</div>
-        <p class="footer-brand-desc">
-          Daily mandi price reports in 4 languages,<br>
-          powered by government data and AI.
+    <div class="footer-layout">
+      <div class="footer-brand">
+        <h3>MandiBhav by GramIQ</h3>
+        <p>
+          AI-powered agricultural market intelligence for Indian farmers. Providing verified daily APMC prices in 4 languages: English, हिंदी, मराठी, and ગુજરાતી.
+        </p>
+        <p style="margin-top: 1rem; font-style: italic; color: #7f9384; font-size: 0.85rem;">
+          Pehle bhav jano, phir becho.
         </p>
       </div>
-      <div>
-        <div class="footer-heading">Commodities</div>
+      <div class="footer-links-col">
+        <h4>Commodities</h4>
         <div class="footer-links">
-          <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/soybean/">Soybean Rates</a>
-          <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/cotton/">Cotton Rates</a>
+          <a href="/soybean/">Soybean Rates</a>
+          <a href="/cotton/">Cotton Rates</a>
         </div>
       </div>
-      <div>
-        <div class="footer-heading">Data Source</div>
+      <div class="footer-links-col">
+        <h4>Resources</h4>
         <div class="footer-links">
-          <a href="https://data.gov.in" target="_blank" rel="noopener">data.gov.in (OGD)</a>
-          <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/sitemap.xml">Sitemap</a>
-          <a href="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/rss.xml">RSS Feed</a>
+          <a href="https://data.gov.in" target="_blank" rel="noopener">data.gov.in (OGD Portal)</a>
+          <a href="/sitemap.xml">Sitemap</a>
+          <a href="/rss.xml">RSS Feed</a>
+          <a href="https://gramiq.ai" target="_blank" rel="noopener">GramIQ Official Site</a>
         </div>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2026 GramIQ. Prices are indicative — verify before trading.</span>
-      <span>Generated 2026-06-04 17:44 UTC</span>
+      <span>© 2026 GramIQ. Indicative rates only. Please check with your local APMC before trading.</span>
+      <span>Generated: 2026-06-05 07:41 UTC</span>
     </div>
   </div>
 </footer>
 
-<script src="https://the-harsh-vardhan.github.io/GramIQ-MandiBhav/assets/search.js" defer></script>
+<script src="/assets/search.js" defer></script>
 </body>
 </html>
