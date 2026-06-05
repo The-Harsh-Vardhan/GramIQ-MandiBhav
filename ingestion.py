@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 import config
 from config import (
@@ -89,7 +88,7 @@ class MockProvider(DataProvider):
                     )
                     records.append(record)
                 except Exception as e:
-                    logger.warning("Row %d in %s skipped: %s", i, csv_path.name, e)
+                    logger.warning("Skipped record due to validation failure on Row %d in %s: %s", i, csv_path.name, e)
 
         logger.info("MockProvider: loaded %d records from %s", len(records), csv_path.name)
         return records
@@ -119,75 +118,246 @@ class LiveProvider(DataProvider):
     # Placeholder strings that indicate the key was never set
     _PLACEHOLDER_KEYS = {"your_ogd_api_key_here", "", "none", "null"}
 
-    def __init__(self, api_key: str = OGD_API_KEY):
-        self.api_key = api_key
+    def __init__(
+        self,
+        api_key: str = OGD_API_KEY,
+        endpoint: str = OGD_API_BASE_URL,
+        resource_id: str = OGD_RESOURCE_ID,
+    ):
+        self.api_key = api_key.strip() if api_key else ""
+        self.endpoint = endpoint.strip() if endpoint else ""
+        self.resource_id = resource_id.strip() if resource_id else ""
+        self.validate_config()
+        if getattr(config, "DEBUG_OGD_SCHEMA", False):
+            self.run_schema_discovery()
+
+    def run_schema_discovery(self) -> None:
+        """Fetch OGD records without filters to print/validate schema."""
+        logger.info("[SCHEMA DISCOVERY] Starting schema discovery mode...")
+        url = f"{self.endpoint}/{self.resource_id}"
+        params = {
+            "api-key": self.api_key,
+            "format": OGD_API_FORMAT,
+            "limit": 5,
+        }
+        headers = {
+            "User-Agent": "GramIQ-MandiBhav/1.0.0 (https://gramiq.ai; contact@gramiq.ai)"
+        }
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                records = data.get("records", [])
+                if records:
+                    first_record = records[0]
+                    logger.info("[SCHEMA DISCOVERY] First record: %s", first_record)
+                    field_names = list(first_record.keys())
+                    logger.info("[SCHEMA DISCOVERY] Field names in response records: %s", field_names)
+                    
+                    fields_to_validate = ["Arrival_Date", "commodity", "Commodity", "arrival_date"]
+                    for f in fields_to_validate:
+                        is_present = f in field_names
+                        logger.info("[SCHEMA DISCOVERY] Field '%s' validation: %s", f, "VALID/PRESENT" if is_present else "INVALID/NOT PRESENT")
+                else:
+                    logger.warning("[SCHEMA DISCOVERY] No records returned.")
+            else:
+                logger.error("[SCHEMA DISCOVERY] Request failed with status code: %d", response.status_code)
+        except Exception as e:
+            logger.error("[SCHEMA DISCOVERY] Error during discovery: %s", e)
+
+    def validate_config(self) -> None:
+        """Validate the OGD configuration parameters. Raises ValueError if invalid."""
+        import re
+
+        # 1. API key presence validation
         if not self.api_key or self.api_key.lower() in self._PLACEHOLDER_KEYS:
             raise ValueError(
                 "OGD_API_KEY is not configured. "
                 "Set a valid key in .env or switch to PIPELINE_MODE=dev."
             )
 
-    @retry(
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(multiplier=2, min=3, max=12),
-        retry=retry_if_exception_type((requests.Timeout, requests.ConnectionError)),
-        reraise=True,
-    )
+        # 2. Endpoint format (should start with http:// or https://)
+        if not self.endpoint:
+            raise ValueError("OGD API endpoint is missing or empty.")
+        if not (self.endpoint.startswith("http://") or self.endpoint.startswith("https://")):
+            raise ValueError(f"OGD API endpoint must start with http:// or https:// (got '{self.endpoint}')")
+
+        # 3. Resource ID format (should be a valid UUID format)
+        if not self.resource_id:
+            raise ValueError("OGD Resource ID is missing or empty.")
+        uuid_pattern = r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+        if not re.match(uuid_pattern, self.resource_id.lower()):
+            raise ValueError(f"OGD Resource ID must be a valid UUID format (got '{self.resource_id}')")
+
     def _call_ogd_api_page(
         self,
-        date: str,
-        commodity_filter: str,
+        date: Optional[str],
+        commodity_filter: Optional[str],
         offset: int,
         limit: int,
     ) -> list[dict]:
         """Make one paginated OGD API request and return raw records."""
-        # OGD date format: DD/MM/YYYY
+        import time
         from datetime import date as date_cls
-        d = date_cls.fromisoformat(date)
-        ogd_date = d.strftime("%d/%m/%Y")
+        from config import DEBUG_INGESTION
 
         params = {
             "api-key": self.api_key,
             "format": OGD_API_FORMAT,
             "offset": offset,
             "limit": limit,
-            "filters[Arrival_Date]": ogd_date,
-            "filters[commodity]": commodity_filter,
         }
-        url = f"{OGD_API_BASE_URL}/{OGD_RESOURCE_ID}"
+        if date:
+            d = date_cls.fromisoformat(date)
+            ogd_date = d.strftime("%d/%m/%Y")
+            params["filters[arrival_date]"] = ogd_date
+        else:
+            ogd_date = "None"
 
-        try:
-            response = requests.get(url, params=params, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            records = data.get("records", [])
-            logger.info(
-                "OGD API returned %d records for date=%s commodity=%s offset=%d",
-                len(records), date, commodity_filter, offset
-            )
-            return records
-        except requests.HTTPError as e:
-            logger.error("OGD API HTTP error: %s", e)
-            raise
+        if commodity_filter:
+            params["filters[commodity]"] = commodity_filter
 
-    def _fetch_all_pages(self, date: str, commodity_filter: str) -> list[dict]:
+        url = f"{self.endpoint}/{self.resource_id}"
+        
+        # Use custom User-Agent to prevent the OGD server from dropping/timing out requests
+        headers = {
+            "User-Agent": "GramIQ-MandiBhav/1.0.0 (https://gramiq.ai; contact@gramiq.ai)"
+        }
+        timeout_val = 15
+
+        # Detailed Logging before request: Endpoint, Resource ID, Commodity, Date, Limit, Timeout
+        logger.info(
+            "Fetching OGD data:\n"
+            "  Endpoint: %s\n"
+            "  Resource ID: %s\n"
+            "  Commodity: %s\n"
+            "  Date: %s (OGD=%s)\n"
+            "  Limit: %d\n"
+            "  Timeout: %ds",
+            self.endpoint, self.resource_id, commodity_filter, date, ogd_date, limit, timeout_val
+        )
+
+        if DEBUG_INGESTION:
+            logger.info("[DEBUG] Request URL: %s", url)
+            logger.info("[DEBUG] Query Parameters: %s", params)
+
+        max_attempts = 4  # 1 initial attempt + 3 retries
+        backoff = 1.0
+
+        for attempt in range(1, max_attempts + 1):
+            t_start = time.time()
+            try:
+                response = requests.get(url, params=params, headers=headers, timeout=timeout_val)
+                elapsed = time.time() - t_start
+                status_code = response.status_code
+
+                # Non-200 responses
+                if status_code != 200:
+                    logger.error(
+                        "OGD API attempt %d failed: Status Code=%d | Response Time=%.2fs",
+                        attempt, status_code, elapsed
+                    )
+                    response.raise_for_status()
+
+                # If successful
+                try:
+                    data = response.json()
+                except ValueError as json_err:
+                    logger.error(
+                        "OGD API attempt %d returned invalid JSON: Response Time=%.2fs | Error: %s",
+                        attempt, elapsed, json_err
+                    )
+                    raise ValueError(f"Invalid JSON response from OGD API: {json_err}")
+
+                # Check if it returned {"message": "ERRORS"} or similar error structures
+                if "records" not in data:
+                    message = data.get("message", "No 'records' field in response JSON")
+                    logger.error(
+                        "OGD API attempt %d failed: Response Time=%.2fs | Error message: %s",
+                        attempt, elapsed, message
+                    )
+                    raise ValueError(f"OGD API returned error response: {message}")
+
+                records = data.get("records", [])
+
+                # Detailed Logging after request: Status Code, Response Time, Record Count
+                logger.info(
+                    "OGD API SUCCESS:\n"
+                    "  Status Code: %d\n"
+                    "  Response Time: %.2fs\n"
+                    "  Record Count: %d",
+                    status_code, elapsed, len(records)
+                )
+
+                if DEBUG_INGESTION:
+                    raw_text = response.text
+                    snippet = raw_text[:500] + ("..." if len(raw_text) > 500 else "")
+                    logger.info("[DEBUG] First Response Snippet: %s", snippet)
+
+                return records
+
+            except (requests.Timeout, requests.ConnectionError, requests.HTTPError, ValueError) as e:
+                elapsed = time.time() - t_start
+                exc_type = type(e).__name__
+                exc_msg = str(e)
+
+                # Detailed Logging if failure: Exception Type, Exception Message
+                logger.error(
+                    "OGD API request failed on attempt %d:\n"
+                    "  Exception Type: %s\n"
+                    "  Exception Message: %s\n"
+                    "  Response Time: %.2fs",
+                    attempt, exc_type, exc_msg, elapsed
+                )
+
+                # Determine retry conditions: ONLY Timeout, Connection errors, or 5xx HTTP errors
+                should_retry = False
+                if isinstance(e, (requests.Timeout, requests.ConnectionError)):
+                    should_retry = True
+                elif isinstance(e, requests.HTTPError) and e.response is not None:
+                    if 500 <= e.response.status_code < 600:
+                        should_retry = True
+
+                # Do NOT retry for 401, 403, or invalid resource ID
+                if should_retry and attempt < max_attempts:
+                    logger.warning(
+                        "Retrying request (Retry %d of 3) in %.1fs...",
+                        attempt, backoff
+                    )
+                    time.sleep(backoff)
+                    backoff *= 2.0
+                else:
+                    raise e
+
+        return []
+
+    def _fetch_all_pages(self, date: Optional[str], commodity_filter: Optional[str], limit: Optional[int] = None) -> list[dict]:
         """Fetch all pages for one commodity filter value."""
         all_records: list[dict] = []
         offset = 0
+        
+        from config import DEBUG_INGESTION
+        if limit is not None:
+            page_limit = limit
+        elif DEBUG_INGESTION:
+            # Use limit=10 during debugging to avoid loading excessive data
+            page_limit = 10
+        else:
+            page_limit = OGD_PAGE_LIMIT
 
         while True:
             page = self._call_ogd_api_page(
                 date=date,
                 commodity_filter=commodity_filter,
                 offset=offset,
-                limit=OGD_PAGE_LIMIT,
+                limit=page_limit,
             )
             if not page:
                 break
             all_records.extend(page)
-            if len(page) < OGD_PAGE_LIMIT:
+            if len(page) < page_limit:
                 break
-            offset += OGD_PAGE_LIMIT
+            offset += page_limit
 
         return all_records
 
@@ -219,6 +389,17 @@ class LiveProvider(DataProvider):
                 # OGD arrivals are in quintals; convert to tonnes (1 quintal = 0.1 tonne)
                 arrival_tonnes = float(arrival_raw or 0) * 0.1
 
+                # Parse raw date from the record if it exists and differs
+                raw_date = row.get("arrival_date", row.get("Arrival_Date", ""))
+                record_date = date
+                if raw_date:
+                    try:
+                        from datetime import datetime
+                        parsed_dt = datetime.strptime(str(raw_date).strip(), "%d/%m/%Y")
+                        record_date = parsed_dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
                 record = MarketRecord(
                     state=get_field(row, "state"),
                     district=get_field(row, "district"),
@@ -230,36 +411,75 @@ class LiveProvider(DataProvider):
                     max_price=float(get_field(row, "max_price") or 0),
                     modal_price=float(get_field(row, "modal_price") or 0),
                     arrival_tonnes=arrival_tonnes,
-                    date=date,
+                    date=record_date,
                 )
                 records.append(record)
             except Exception as e:
-                logger.debug("Skipping OGD record: %s | Error: %s", row, e)
+                logger.warning("Skipped record due to validation failure on OGD record: %s | Error: %s", row, e)
 
         logger.info("Parsed %d valid records from OGD response", len(records))
         return records
 
-    def fetch_market_data(self, date: str, commodity: str) -> list[MarketRecord]:
+    def fetch_market_data(self, date: str, commodity: str, limit: Optional[int] = None) -> list[MarketRecord]:
         commodity_key = commodity.lower()
         filter_values = OGD_COMMODITY_FILTERS.get(commodity_key, [commodity.title()])
         all_raw: list[dict] = []
 
+        # --- Step 1: Date + Commodity ---
+        logger.info("Attempting Query 1: date + commodity filter for %s on %s", commodity, date)
         for commodity_filter in filter_values:
-            raw = self._fetch_all_pages(date, commodity_filter)
+            if limit is not None:
+                raw = self._fetch_all_pages(date, commodity_filter, limit)
+            else:
+                raw = self._fetch_all_pages(date, commodity_filter)
             if raw:
-                logger.info(
-                    "Using OGD commodity filter '%s' for %s on %s",
-                    commodity_filter, commodity, date
-                )
+                logger.info("Query 1 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
                 all_raw = raw
                 break
 
+        # --- Step 2: Commodity Only ---
         if not all_raw:
-            logger.warning(
-                "OGD returned no records for %s on %s using filters: %s",
-                commodity, date, ", ".join(filter_values)
-            )
-            return []
+            logger.info("Query 1 returned 0 records. Attempting Query 2: commodity filter only for %s", commodity)
+            for commodity_filter in filter_values:
+                if limit is not None:
+                    raw = self._fetch_all_pages(None, commodity_filter, limit)
+                else:
+                    raw = self._fetch_all_pages(None, commodity_filter)
+                if raw:
+                    logger.info("Query 2 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
+                    all_raw = raw
+                    break
+
+        # --- Step 3: Latest Records (no filters) ---
+        if not all_raw:
+            logger.info("Query 2 returned 0 records. Attempting Query 3: latest records (no filters)")
+            if limit is not None:
+                raw = self._fetch_all_pages(None, None, limit)
+            else:
+                raw = self._fetch_all_pages(None, None, 100)
+            if raw:
+                logger.info("Query 3 SUCCESS: Found %d latest raw records from OGD API", len(raw))
+                # Filter locally for commodity
+                filtered_raw = []
+                for row in raw:
+                    row_commodity = str(row.get("commodity", "")).strip().lower()
+                    for field_name in ["commodity", "Commodity"]:
+                        if field_name in row:
+                            row_commodity = str(row[field_name]).strip().lower()
+                            break
+                    if any(fv.lower() == row_commodity for fv in filter_values):
+                        filtered_raw.append(row)
+                if filtered_raw:
+                    logger.info("Filtered Query 3: Found %d records matching commodity %s", len(filtered_raw), commodity)
+                    all_raw = filtered_raw
+                else:
+                    logger.warning("Query 3 returned records, but none matched commodity %s", commodity)
+
+        # --- Step 4: Fallback to Mock ---
+        if not all_raw:
+            logger.warning("All OGD API queries returned 0 records for %s on %s. Falling back to MockProvider.", commodity, date)
+            mock_provider = MockProvider()
+            return mock_provider.fetch_market_data(date, commodity)
 
         return self._parse_ogd_records(all_raw, date, commodity)
 
@@ -293,6 +513,82 @@ def get_provider() -> DataProvider:
 
 
 # ---------------------------------------------------------------------------
+# API Connectivity Test
+# ---------------------------------------------------------------------------
+
+def test_connection() -> dict:
+    """
+    Test API connectivity to OGD India.
+    Verifies config validity and attempts to fetch exactly 1 record.
+    Returns:
+        {
+          "success": bool,
+          "status_code": int,
+          "records": int,
+          "error": str | None
+        }
+    """
+    try:
+        provider = LiveProvider()
+    except Exception as e:
+        return {
+            "success": False,
+            "status_code": 0,
+            "records": 0,
+            "error": f"Configuration Validation Failed: {e}"
+        }
+
+    import time
+    url = f"{provider.endpoint}/{provider.resource_id}"
+    params = {
+        "api-key": provider.api_key,
+        "format": OGD_API_FORMAT,
+        "limit": 1
+    }
+    headers = {
+        "User-Agent": "GramIQ-MandiBhav/1.0.0 (https://gramiq.ai; contact@gramiq.ai)"
+    }
+
+    t_start = time.time()
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        elapsed = time.time() - t_start
+        status_code = response.status_code
+
+        if status_code == 200:
+            data = response.json()
+            if "records" in data:
+                return {
+                    "success": True,
+                    "status_code": status_code,
+                    "records": len(data["records"]),
+                    "error": None
+                }
+            else:
+                error_msg = data.get("message", "No 'records' field in response JSON")
+                return {
+                    "success": False,
+                    "status_code": status_code,
+                    "records": 0,
+                    "error": f"OGD API returned error message: {error_msg}"
+                }
+        else:
+            return {
+                "success": False,
+                "status_code": status_code,
+                "records": 0,
+                "error": f"HTTP error status {status_code}"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "status_code": 0,
+            "records": 0,
+            "error": f"Connection Failed: {type(e).__name__} — {e}"
+        }
+
+
+# ---------------------------------------------------------------------------
 # Main ingestion function
 # ---------------------------------------------------------------------------
 
@@ -311,20 +607,19 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
     try:
         records = provider.fetch_market_data(date, commodity)
     except Exception as e:
-        logger.error(
-            "Provider %s failed for %s: %s",
-            type(provider).__name__, commodity, e
-        )
         if not isinstance(provider, MockProvider):
-            logger.warning(
-                "Falling back to MockProvider for %s (live data unavailable).", commodity
-            )
+            logger.warning("Live provider unavailable")
+            logger.warning("Switching to mock mode")
+            logger.warning("Reason: %s", e)
             actual_provider = MockProvider()
             try:
                 records = actual_provider.fetch_market_data(date, commodity)
             except Exception as fallback_err:
                 logger.error("MockProvider also failed for %s: %s", commodity, fallback_err)
                 return []
+        else:
+            logger.error("MockProvider failed for %s: %s", commodity, e)
+            return []
 
     if not records:
         logger.warning("No records fetched for %s on %s", commodity, date)

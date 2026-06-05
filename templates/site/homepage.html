@@ -23,7 +23,7 @@
 
       {# Client Search Box #}
       <div class="search-wrapper">
-        <span class="search-icon" aria-hidden="true">🔍</span>
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input
           id="search-input"
           class="search-input"
@@ -171,7 +171,7 @@
           <h3 class="article-card-title">{{ article.title }}</h3>
         </div>
         <div class="article-card-meta">
-          <span>📅 {{ article.date }}</span>
+          <span>{{ article.date }}</span>
           <span>•</span>
           <span>{{ article.type_label }}</span>
           {% if article.lang != 'en' %}
@@ -181,7 +181,7 @@
         </div>
         <a href="{{ article.url }}" class="article-card-footer">
           <span>Read Full Report</span>
-          <span>➜</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
       </div>
       {% endfor %}

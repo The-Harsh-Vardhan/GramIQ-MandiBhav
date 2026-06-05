@@ -10,8 +10,9 @@ import re
 import time
 from typing import Optional
 
+from pydantic import BaseModel, Field
 from google.genai import types
-
+import config
 from config import (
     GEMINI_MODEL, LLM_MAX_RETRIES, LLM_RETRY_DELAY_SECONDS, TRANSLATION_LANGUAGES,
     COMMODITY_TRANSLATIONS, VALID_TRANSLATION_LENGTH_RATIO,
@@ -19,6 +20,16 @@ from config import (
 from schemas import ArticleOutput, TranslatedArticle
 
 logger = logging.getLogger("mandibhav.translator")
+
+class SingleTranslation(BaseModel):
+    scope_key: str = Field(description="The unique key identifier for the scope target.")
+    language_code: str = Field(description="The target language code, e.g. hi, mr, gu.")
+    title: str = Field(description="The translated article title.")
+    meta_description: str = Field(description="The translated article meta description.")
+    body_html: str = Field(description="The translated article HTML body.")
+
+class BatchTranslationResponse(BaseModel):
+    translations: list[SingleTranslation] = Field(description="List of translated articles.")
 
 TRANSLATION_SYSTEM_PROMPT = (
     "Translate Indian mandi content faithfully. Preserve numbers, market names, HTML tags, "
@@ -118,6 +129,11 @@ def _build_translation_prompt(
 def _translate_batch(prompt: str) -> Optional[str]:
     """Call Gemini API for translation and return raw JSON text."""
     from llm_engine import _get_client
+    from google.genai.errors import APIError
+
+    if getattr(config, "quota_exhausted_mode", False):
+        logger.warning("Skipping translation batch because quota_exhausted_mode is active")
+        return None
 
     client = _get_client()
     try:
@@ -127,14 +143,70 @@ def _translate_batch(prompt: str) -> Optional[str]:
             config=types.GenerateContentConfig(
                 system_instruction=TRANSLATION_SYSTEM_PROMPT,
                 response_mime_type="application/json",
+                response_schema=BatchTranslationResponse,
                 temperature=0.1,
                 max_output_tokens=8192,
             ),
         )
         return response.text.strip() if response.text else None
     except Exception as e:
-        logger.error("Translation API call failed: %s", e)
-        return None
+        is_429 = False
+        is_503 = False
+        
+        if isinstance(e, APIError):
+            if e.code == 429:
+                is_429 = True
+            elif e.code == 503:
+                is_503 = True
+        else:
+            err_str = str(e)
+            if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
+                is_429 = True
+            elif "503" in err_str or "UNAVAILABLE" in err_str:
+                is_503 = True
+
+        if is_429:
+            logger.error("429 Quota Exceeded during translation. Switching pipeline to quota_exhausted_mode.")
+            config.quota_exhausted_mode = True
+            
+            # Extract delay to log it, but do not sleep/retry in this call.
+            delay = 24.0
+            if isinstance(e, APIError) and e.details:
+                try:
+                    details_list = e.details.get("error", {}).get("details", [])
+                    for detail in details_list:
+                        if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo":
+                            retry_delay = detail.get("retryDelay")
+                            if isinstance(retry_delay, dict):
+                                sec = retry_delay.get("seconds")
+                                if sec is not None:
+                                    delay = float(sec)
+                            elif isinstance(retry_delay, str):
+                                match = re.search(r"(\d+(?:\.\d+)?)", retry_delay)
+                                if match:
+                                    delay = float(match.group(1))
+                except Exception as err:
+                    logger.debug("Failed to extract retryDelay: %s", err)
+            else:
+                err_str = str(e)
+                sec_match = re.search(r"'seconds':\s*(\d+)", err_str)
+                if sec_match:
+                    delay = float(sec_match.group(1))
+                else:
+                    match = re.search(r"retry.*?seconds.*?:.*?(\d+)", err_str, re.IGNORECASE)
+                    if match:
+                        delay = float(match.group(1))
+
+            capped_delay = min(delay, 60.0)
+            logger.warning("Quota Exceeded info: retry delay would be %.1fs (capped at 60s)", capped_delay)
+            return None
+
+        elif is_503:
+            logger.warning("503 Service Unavailable during translation. Retrying...")
+            return None
+        else:
+            logger.error("Translation API call failed: %s", e)
+            return None
 
 
 def translate_articles(
@@ -153,6 +225,10 @@ def translate_articles(
     correction_suffix = ""
 
     for attempt in range(1, LLM_MAX_RETRIES + 2):
+        if getattr(config, "quota_exhausted_mode", False):
+            logger.warning("Short-circuiting translation due to quota_exhausted_mode")
+            break
+
         raw = _translate_batch(prompt + correction_suffix)
         if raw:
             try:
@@ -199,6 +275,8 @@ def translate_articles(
                 )
 
         if attempt <= LLM_MAX_RETRIES:
+            if getattr(config, "quota_exhausted_mode", False):
+                break
             logger.warning(
                 "Translation attempt %d failed for %s. Retrying after %.1fs ...",
                 attempt, commodity, LLM_RETRY_DELAY_SECONDS

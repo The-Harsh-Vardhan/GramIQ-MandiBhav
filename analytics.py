@@ -341,6 +341,9 @@ def build_scope_matrix(date: str, knowledge: dict) -> tuple[dict[str, AnalyticsP
                 market=payload.market,
             ))
 
+    if getattr(config, "DEMO_MODE", False):
+        scope_targets = [s for s in scope_targets if s.scope_key == "soybean_maharashtra"]
+
     logger.info(
         "Scope matrix built: %d articles to generate for %s",
         len(scope_targets), date

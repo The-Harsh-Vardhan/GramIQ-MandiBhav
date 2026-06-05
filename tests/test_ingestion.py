@@ -240,3 +240,51 @@ class TestLiveProvider:
 
         assert len(records) == 1
         assert calls == [("2026-06-04", "Soyabean")]
+
+    def test_validation_invalid_endpoint(self):
+        """LiveProvider should fail to initialize with an invalid endpoint URL."""
+        with pytest.raises(ValueError, match="endpoint must start with http"):
+            LiveProvider(api_key="test-key", endpoint="invalid-url")
+
+    def test_validation_invalid_resource_id(self):
+        """LiveProvider should fail to initialize with an invalid Resource ID format."""
+        with pytest.raises(ValueError, match="Resource ID must be a valid UUID format"):
+            LiveProvider(api_key="test-key", resource_id="invalid-uuid")
+
+    def test_connection_success(self, monkeypatch):
+        """test_connection() should return success = True when API call is successful."""
+        from ingestion import test_connection
+        import requests
+
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"records": [{"some": "data"}]}
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(requests, "get", mock_get)
+        monkeypatch.setattr(LiveProvider, "validate_config", lambda self: None)
+
+        res = test_connection()
+        assert res["success"] is True
+        assert res["status_code"] == 200
+        assert res["records"] == 1
+        assert res["error"] is None
+
+    def test_connection_failure(self, monkeypatch):
+        """test_connection() should handle errors gracefully and return success = False."""
+        from ingestion import test_connection
+        import requests
+
+        def mock_get(*args, **kwargs):
+            raise requests.Timeout("Timeout testing")
+
+        monkeypatch.setattr(requests, "get", mock_get)
+        monkeypatch.setattr(LiveProvider, "validate_config", lambda self: None)
+
+        res = test_connection()
+        assert res["success"] is False
+        assert res["records"] == 0
+        assert "Timeout" in res["error"]

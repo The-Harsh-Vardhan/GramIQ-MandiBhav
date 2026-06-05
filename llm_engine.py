@@ -14,13 +14,23 @@ import re
 import time
 from typing import Optional
 
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
+import config
 from config import GEMINI_API_KEY, GEMINI_MODEL, LLM_MAX_RETRIES, LLM_RETRY_DELAY_SECONDS, SEO_KEYWORDS
 from schemas import AnalyticsPayload, ArticleDraft, ArticleOutput, ScopeTarget
 from seo_assembler import assemble_article_output
 
 logger = logging.getLogger("mandibhav.llm_engine")
+
+class ScopeArticleDraft(BaseModel):
+    scope_key: str = Field(description="The unique key identifier for the scope target.")
+    title: str = Field(min_length=10, max_length=120, description="Creative English article title.")
+    body_html: str = Field(min_length=200, description="Clean HTML article body with semantic headings (h2, h3) and paragraphs.")
+
+class BatchArticleResponse(BaseModel):
+    articles: list[ScopeArticleDraft] = Field(description="List of generated articles, one for each input scope_key.")
 
 _client: Optional[genai.Client] = None
 
@@ -172,6 +182,13 @@ def _build_batch_prompt(
 
 def _call_gemini_api(system_prompt: str, user_message: str) -> Optional[str]:
     """Make a single Gemini API call and return the raw text response."""
+    import config
+    from google.genai.errors import APIError
+
+    if getattr(config, "quota_exhausted_mode", False):
+        logger.warning("Skipping Gemini API call because quota_exhausted_mode is active")
+        return None
+
     client = _get_client()
     try:
         response = client.models.generate_content(
@@ -180,21 +197,70 @@ def _call_gemini_api(system_prompt: str, user_message: str) -> Optional[str]:
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
+                response_schema=BatchArticleResponse,
                 temperature=0.4,
                 max_output_tokens=8192,
             ),
         )
         return response.text
     except Exception as e:
-        err_str = str(e)
-        if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
-            match = re.search(r"retry.*?(\d+)s", err_str, re.IGNORECASE)
-            wait = int(match.group(1)) + 2 if match else 30
-            logger.warning("Rate limit hit. Waiting %ds before retry ...", wait)
-            time.sleep(wait)
+        is_429 = False
+        is_503 = False
+        
+        if isinstance(e, APIError):
+            if e.code == 429:
+                is_429 = True
+            elif e.code == 503:
+                is_503 = True
+        else:
+            err_str = str(e)
+            if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
+                is_429 = True
+            elif "503" in err_str or "UNAVAILABLE" in err_str:
+                is_503 = True
+
+        if is_429:
+            logger.error("429 Quota Exceeded. Switching pipeline to quota_exhausted_mode and stopping generation.")
+            config.quota_exhausted_mode = True
+            
+            # Extract delay to log it, but do not sleep/retry in this call.
+            delay = 24.0
+            if isinstance(e, APIError) and e.details:
+                try:
+                    details_list = e.details.get("error", {}).get("details", [])
+                    for detail in details_list:
+                        if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo":
+                            retry_delay = detail.get("retryDelay")
+                            if isinstance(retry_delay, dict):
+                                sec = retry_delay.get("seconds")
+                                if sec is not None:
+                                    delay = float(sec)
+                            elif isinstance(retry_delay, str):
+                                match = re.search(r"(\d+(?:\.\d+)?)", retry_delay)
+                                if match:
+                                    delay = float(match.group(1))
+                except Exception as err:
+                    logger.debug("Failed to extract retryDelay: %s", err)
+            else:
+                err_str = str(e)
+                sec_match = re.search(r"'seconds':\s*(\d+)", err_str)
+                if sec_match:
+                    delay = float(sec_match.group(1))
+                else:
+                    match = re.search(r"retry.*?seconds.*?:.*?(\d+)", err_str, re.IGNORECASE)
+                    if match:
+                        delay = float(match.group(1))
+
+            capped_delay = min(delay, 60.0)
+            logger.warning("Quota Exceeded info: retry delay would be %.1fs (capped at 60s)", capped_delay)
+            return None
+
+        elif is_503:
+            logger.warning("503 Service Unavailable (Model experiencing high demand). Retrying...")
+            return None
         else:
             logger.error("Gemini API call failed: %s", e)
-        return None
+            return None
 
 
 def _parse_batch_response(raw_text: str) -> dict[str, ArticleDraft]:
@@ -228,6 +294,10 @@ def generate_articles_for_commodity(
     correction_suffix = ""
 
     for attempt in range(1, LLM_MAX_RETRIES + 2):
+        if getattr(config, "quota_exhausted_mode", False):
+            logger.warning("Short-circuiting generation due to quota_exhausted_mode")
+            break
+
         raw = _call_gemini_api(GENERATION_SYSTEM_PROMPT, user_message + correction_suffix)
         if raw:
             try:
@@ -252,6 +322,8 @@ def generate_articles_for_commodity(
                 )
 
         if attempt <= LLM_MAX_RETRIES:
+            if getattr(config, "quota_exhausted_mode", False):
+                break
             logger.warning(
                 "Generation attempt %d failed for %s. Retrying after %.1fs ...",
                 attempt, commodity, LLM_RETRY_DELAY_SECONDS

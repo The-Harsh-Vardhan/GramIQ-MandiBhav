@@ -118,36 +118,78 @@ def init_db() -> None:
 
 def insert_market_records(records: list[MarketRecord], source: str = "mock") -> int:
     """
-    Bulk insert market records. Skips duplicates (ON CONFLICT IGNORE).
+    Insert market records. Checks for duplicates and records skipped records.
     Returns the count of newly inserted rows.
     """
-    rows = [
-        (
-            r.commodity.lower().strip(),
-            r.date,
-            r.state,
-            r.district,
-            r.market,
-            r.variety,
-            r.grade,
-            r.min_price,
-            r.max_price,
-            r.modal_price,
-            r.arrival_tonnes,
-            source,
-        )
-        for r in records
-    ]
-    sql = """
-        INSERT OR IGNORE INTO market_data
+    inserted = 0
+    skipped_dupes = 0
+    other_errors = 0
+
+    sql_check = """
+        SELECT 1 FROM market_data
+        WHERE commodity_slug = ? AND market_date = ? AND state = ? AND market_name = ? AND variety = ?
+        LIMIT 1
+    """
+    sql_insert = """
+        INSERT INTO market_data
             (commodity_slug, market_date, state, district, market_name,
              variety, grade, min_price, max_price, modal_price, arrival_tonnes, source)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
+
     with get_connection() as conn:
-        cursor = conn.executemany(sql, rows)
-        inserted = cursor.rowcount
-    logger.info("Inserted %d / %d market records (source=%s)", inserted, len(rows), source)
+        for r in records:
+            comm = r.commodity.lower().strip()
+
+            # Check for duplicate in database
+            cursor = conn.execute(sql_check, (comm, r.date, r.state, r.market, r.variety))
+            exists = cursor.fetchone()
+
+            if exists:
+                logger.info(
+                    "Skipped record due to duplicate key: market=%s, commodity=%s, date=%s, state=%s, variety=%s",
+                    r.market, comm, r.date, r.state, r.variety
+                )
+                skipped_dupes += 1
+                continue
+
+            # Perform insertion
+            try:
+                conn.execute(
+                    sql_insert,
+                    (
+                        comm,
+                        r.date,
+                        r.state,
+                        r.district,
+                        r.market,
+                        r.variety,
+                        r.grade,
+                        r.min_price,
+                        r.max_price,
+                        r.modal_price,
+                        r.arrival_tonnes,
+                        source,
+                    ),
+                )
+                inserted += 1
+            except sqlite3.IntegrityError as ie:
+                logger.warning(
+                    "Skipped record due to constraint violation (market=%s, commodity=%s, date=%s): %s",
+                    r.market, comm, r.date, ie
+                )
+                other_errors += 1
+            except Exception as e:
+                logger.error(
+                    "Skipped record due to unexpected error/constraint violation (market=%s, commodity=%s, date=%s): %s",
+                    r.market, comm, r.date, e
+                )
+                other_errors += 1
+
+    logger.info(
+        "Inserted %d / %d market records (source=%s). Skipped duplicates: %d. Other errors: %d.",
+        inserted, len(records), source, skipped_dupes, other_errors
+    )
     return inserted
 
 

@@ -32,15 +32,15 @@
           {% if article.confidence_score is defined %}
             {% if article.confidence_score >= 0.75 %}
             <span class="confidence-badge conf-high" title="High confidence — auto-published">
-              ✓ {{ (article.confidence_score * 100) | int }}% confidence
+              {{ (article.confidence_score * 100) | int }}% confidence
             </span>
             {% elif article.confidence_score >= 0.4 %}
             <span class="confidence-badge conf-medium" title="Reviewed before publishing">
-              ⚠ {{ (article.confidence_score * 100) | int }}% confidence
+              {{ (article.confidence_score * 100) | int }}% confidence
             </span>
             {% else %}
             <span class="confidence-badge conf-low" title="Low confidence report">
-              ⚠ {{ (article.confidence_score * 100) | int }}% confidence
+              {{ (article.confidence_score * 100) | int }}% confidence
             </span>
             {% endif %}
           {% endif %}
@@ -151,7 +151,7 @@
             <a href="https://data.gov.in" target="_blank" rel="noopener" style="text-decoration: underline;">data.gov.in (OGD Portal)</a>
           </p>
           <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; margin-top: 4px;">
-            ⚠️ Prices listed are modal averages reported by local APMCs and are subject to market adjustments.
+            Prices listed are modal averages reported by local APMCs and are subject to market adjustments.
           </p>
         </div>
       </div>
@@ -161,7 +161,7 @@
         <h3>Get Live alerts</h3>
         <p>Subscribe to our automated WhatsApp system or download the GramIQ App to get direct price alerts on your mobile phone.</p>
         <a href="https://gramiq.ai" target="_blank" rel="noopener" class="btn-primary" id="sidebar-app-download">
-          ➤ Subscribe Now
+          Subscribe Now
         </a>
       </div>
 

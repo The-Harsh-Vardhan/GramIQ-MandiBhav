@@ -78,7 +78,11 @@ SITE_DESCRIPTION: str = (
 # ---------------------------------------------------------------------------
 # Pipeline mode
 # ---------------------------------------------------------------------------
-PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "dev")  # "dev" | "live"
+PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "dev")  # "dev" | "live" | "demo"
+DEMO_MODE: bool = (os.environ.get("DEMO_MODE", "false").lower() == "true") or (PIPELINE_MODE == "demo")
+DEBUG_OGD_SCHEMA: bool = os.environ.get("DEBUG_OGD_SCHEMA", "false").lower() == "true"
+quota_exhausted_mode: bool = False
+
 OGD_API_KEY: str = os.environ.get("OGD_API_KEY", "")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 
@@ -94,6 +98,7 @@ OGD_COMMODITY_FILTERS: dict[str, list[str]] = {
     "soybean": ["Soyabean", "Soybean"],
     "cotton": ["Cotton"],
 }
+DEBUG_INGESTION: bool = os.environ.get("DEBUG_INGESTION", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # LLM configuration

@@ -282,7 +282,7 @@ def base_context(base_url: str, current_lang: str = "en") -> dict:
 
 
 def available_lang_links(scope_key: str, registry: dict, base_url: str) -> list[dict]:
-    """Return language link list for an article's scope."""
+    """Return language link list for an article's scope (relative paths, no base_url)."""
     links = []
     for code, info in LANGUAGES.items():
         article = registry["by_scope_lang"].get((scope_key, code))
@@ -290,7 +290,7 @@ def available_lang_links(scope_key: str, registry: dict, base_url: str) -> list[
             links.append({
                 "code":  code,
                 "label": info["label"],
-                "url":   article_url(article, base_url),
+                "url":   article_url(article, ""),   # relative path only
             })
     return links
 
@@ -407,16 +407,14 @@ def render_commodity_pages(registry: dict, env: Environment,
                 for t, arts in sorted(groups_dict.items())
             ]
 
-            # Language variants for this commodity page
+            # Language variants for this commodity page (relative paths, no base_url)
             lang_variants = []
             for code, info in LANGUAGES.items():
                 if registry["by_commodity_lang"].get((comm, code)):
-                    if lang == "en":
+                    if code == "en":
                         url = f"/{comm}/"
                     else:
                         url = f"/{code}/{comm}/"
-                    if code == "en":
-                        url = f"/{comm}/"
                     lang_variants.append({"code": code, "label": info["label"], "url": url})
 
             canon_url = f"{base_url}/{comm}/" if lang == "en" else f"{base_url}/{lang}/{comm}/"
@@ -736,7 +734,23 @@ def main() -> None:
 
     # Step 1: Clean (optional)
     if args.clean and site_dir.exists():
-        shutil.rmtree(site_dir)
+        def remove_readonly(func, path, exc_info):
+            import stat
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
+        try:
+            shutil.rmtree(site_dir, onexc=remove_readonly)
+        except TypeError:
+            try:
+                shutil.rmtree(site_dir, onerror=remove_readonly)
+            except Exception as e:
+                logger.warning("Could not fully clean site directory (some files may be locked): %s", e)
+        except Exception as e:
+            logger.warning("Could not fully clean site directory (some files may be locked): %s", e)
         logger.info("Cleaned site directory: %s", site_dir)
 
     # Step 2: Discover articles

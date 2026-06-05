@@ -461,4 +461,16 @@ def write_article_file(
         json.dump(final_article.model_dump(), f, ensure_ascii=False, indent=2)
 
     logger.debug("Written: %s", file_path)
+
+    # Write a copy to the global json cache folder for Task 8
+    try:
+        cache_dir = output_dir / "json"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = cache_dir / f"article_{scope}_{lang}.json"
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(final_article.model_dump(), f, ensure_ascii=False, indent=2)
+        logger.debug("Cached copy written: %s", cache_path)
+    except Exception as e:
+        logger.warning("Failed to write cached copy (non-fatal): %s", e)
+
     return file_path

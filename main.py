@@ -34,6 +34,7 @@ def _find_cached_output(date: str, scope_key: str, language: str) -> Path | None
         config.OUTPUT_DIR / date / scope_key / f"{language}.json",
         config.OUTPUT_DIR / date / "review" / f"{scope_key}_{language}.json",
         config.OUTPUT_DIR / date / "blocked" / f"{scope_key}_{language}.json",
+        config.OUTPUT_DIR / "json" / f"article_{scope_key}_{language}.json",
     ]
     for path in candidates:
         if path.exists():
@@ -89,9 +90,9 @@ Examples:
     )
     parser.add_argument(
         "--mode",
-        choices=["dev", "live"],
+        choices=["dev", "live", "demo"],
         default=None,
-        help="Pipeline mode: 'dev' uses CSV fixtures, 'live' uses OGD API (default: from PIPELINE_MODE env var)",
+        help="Pipeline mode: 'dev' uses CSV fixtures, 'live' uses OGD API, 'demo' runs limited demo (default: from PIPELINE_MODE env var)",
     )
     parser.add_argument(
         "--commodities",
@@ -119,6 +120,16 @@ Examples:
         "--verbose",
         action="store_true",
         help="Enable DEBUG-level logging",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Force building static site and publishing to gh-pages branch",
+    )
+    parser.add_argument(
+        "--skip-publish",
+        action="store_true",
+        help="Skip automatic building and publishing to gh-pages branch",
     )
     return parser.parse_args()
 
@@ -201,6 +212,10 @@ def stage_generate_and_assemble(
         scopes_by_commodity.setdefault(scope.commodity, []).append(scope)
 
     for commodity, commodity_scopes in scopes_by_commodity.items():
+        if getattr(config, "quota_exhausted_mode", False):
+            logger.warning("Short-circuiting stage_generate_and_assemble due to quota_exhausted_mode")
+            break
+
         logger.info("Processing commodity batch: %s (%d scopes)", commodity, len(commodity_scopes))
         scope_lookup = {scope.scope_key: scope for scope in commodity_scopes}
         payload_lookup = {
@@ -229,7 +244,7 @@ def stage_generate_and_assemble(
             else:
                 missing_generation[scope.scope_key] = payload
 
-        if missing_generation:
+        if missing_generation and not getattr(config, "quota_exhausted_mode", False):
             generated = generate_articles_for_commodity(
                 commodity, date, missing_generation, scope_lookup
             )
@@ -239,6 +254,7 @@ def stage_generate_and_assemble(
                 counts["blocked"] += 1
 
         translation_requests: dict[str, list[str]] = {}
+        cached_translations: dict[str, dict[str, object]] = {}
         if not skip_translate:
             for scope_key in article_inputs:
                 missing_langs: list[str] = []
@@ -246,13 +262,28 @@ def stage_generate_and_assemble(
                     cached_tr = _find_cached_output(date, scope_key, lang_code)
                     if cached_tr:
                         logger.info("Cache hit: translation %s/%s", scope_key, lang_code)
+                        try:
+                            with open(cached_tr, encoding="utf-8") as f:
+                                tr_data = json.load(f)
+                            from schemas import TranslatedArticle
+                            translated = TranslatedArticle(
+                                language_code=lang_code,
+                                title=tr_data["title"],
+                                meta_description=tr_data["meta_description"],
+                                body_html=tr_data["body"],
+                                translation_provider=tr_data.get("translation_provider", "gemini"),
+                            )
+                            cached_translations.setdefault(scope_key, {})[lang_code] = translated
+                        except Exception as e:
+                            logger.warning("Failed to load cached translation: %s", e)
+                            missing_langs.append(lang_code)
                     else:
                         missing_langs.append(lang_code)
                 if missing_langs:
                     translation_requests[scope_key] = missing_langs
 
         batched_translations = {}
-        if translation_requests:
+        if translation_requests and not getattr(config, "quota_exhausted_mode", False):
             batched_translations = translate_articles(
                 commodity,
                 {scope_key: article_inputs[scope_key] for scope_key in translation_requests},
@@ -263,11 +294,16 @@ def stage_generate_and_assemble(
             payload = payload_lookup[scope_key]
             scope = scope_lookup[scope_key]
             translations = batched_translations.get(scope_key, {})
+            if scope_key in cached_translations:
+                translations.update(cached_translations[scope_key])
 
             if scope_key in cached_meta:
                 confidence = cached_meta[scope_key]["confidence_score"]
                 status = cached_meta[scope_key]["publish_status"]
-                en_article = None
+                en_article = assemble_final_article(
+                    article, payload, scope, "en", confidence, status, run_id
+                )
+                write_article_file(en_article)
             else:
                 keywords = build_keywords(payload.commodity, scope.article_type, scope)
                 confidence, status = compute_confidence(article, payload, translations, keywords)
@@ -325,6 +361,117 @@ def stage_evaluate(date: str, pipeline_duration: float) -> None:
     save_report_json(report)
 
 
+def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool) -> None:
+    """Build the static site and publish it to the gh-pages branch on GitHub."""
+    import config
+    import os
+    import subprocess
+    import shutil
+    import tempfile
+
+    if skip_publish:
+        logger.info("Publishing explicitly skipped via CLI flag.")
+        return
+
+    # Skip in GITHUB_ACTIONS since deployment is run by GITHUB_ACTIONS deploy job.
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        logger.info("Running in GitHub Actions environment. Skipping automatic local Git push to gh-pages.")
+        return
+
+    should_publish = force_publish or (mode == "live")
+    if not should_publish:
+        logger.info("Publishing skipped (not in 'live' mode, and --publish was not specified).")
+        return
+
+    logger.info("--- Stage 5: Static Site Generation & Publishing ---")
+
+    # 1. Run build_site.py
+    logger.info("Building static site for date %s...", date)
+    try:
+        subprocess.run([sys.executable, "build_site.py", "--date", date, "--clean"], check=True)
+    except Exception as e:
+        logger.error("Failed to build static site: %s", e)
+        return
+
+    site_dir = config.SITE_DIR
+    if not site_dir.exists():
+        logger.error("Site directory %s does not exist. Cannot publish.", site_dir)
+        return
+
+    # 2. Get remote URL
+    try:
+        remote_url = subprocess.check_output(
+            ["git", "config", "--get", "remote.origin.url"],
+            text=True
+        ).strip()
+    except Exception as e:
+        logger.error("Failed to get Git remote origin URL: %s", e)
+        return
+
+    logger.info("Publishing to GitHub Pages (remote: %s, branch: gh-pages)...", remote_url)
+
+    def run_git(cmd_args, cwd):
+        res = subprocess.run(cmd_args, cwd=cwd, capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error("Git command failed: %s", " ".join(cmd_args))
+            if res.stdout:
+                logger.error("Git stdout: %s", res.stdout)
+            if res.stderr:
+                logger.error("Git stderr: %s", res.stderr)
+            raise subprocess.CalledProcessError(res.returncode, cmd_args, output=res.stdout, stderr=res.stderr)
+        return res
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        try:
+            # Initialize temp repository
+            run_git(["git", "init"], cwd=tmpdir)
+            run_git(["git", "config", "user.name", "GramIQ Publisher"], cwd=tmpdir)
+            run_git(["git", "config", "user.email", "publisher@gramiq.com"], cwd=tmpdir)
+            run_git(["git", "remote", "add", "origin", remote_url], cwd=tmpdir)
+            
+            # Fetch remote gh-pages branch
+            fetch_res = subprocess.run(
+                ["git", "fetch", "origin", "gh-pages"],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True
+            )
+            if fetch_res.returncode == 0:
+                run_git(["git", "checkout", "gh-pages"], cwd=tmpdir)
+                # Clear all files except .git
+                for item in tmp_path.iterdir():
+                    if item.name == ".git":
+                        continue
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+            else:
+                run_git(["git", "checkout", "--orphan", "gh-pages"], cwd=tmpdir)
+
+            # Copy built site files to temp repository
+            shutil.copytree(site_dir, tmpdir, dirs_exist_ok=True)
+            
+            # Create .nojekyll
+            (tmp_path / ".nojekyll").touch()
+
+            # Commit and push
+            run_git(["git", "add", "-A"], cwd=tmpdir)
+            commit_msg = f"deploy: update site for latest run on {date}"
+            # Check if there are changes to commit
+            status_res = run_git(["git", "status", "--porcelain"], cwd=tmpdir)
+            if not status_res.stdout.strip():
+                logger.info("No changes to deploy. GitHub Pages is already up to date.")
+                return
+
+            run_git(["git", "commit", "-m", commit_msg], cwd=tmpdir)
+            run_git(["git", "push", "origin", "gh-pages", "--force"], cwd=tmpdir)
+            logger.info("Successfully published generated articles to GitHub Pages (gh-pages branch)!")
+        except Exception as e:
+            logger.error("Failed to push static site to gh-pages branch: %s", e)
+
+
 # ---------------------------------------------------------------------------
 # Main orchestrator
 # ---------------------------------------------------------------------------
@@ -373,8 +520,17 @@ def main() -> None:
     # Stage 3: Generate + Translate + Assemble
     logger.info("--- Stage 3: Content Generation & Translation ---")
     logger.info("Generating %d articles ...", len(scope_targets))
+
+    # Auto-skip translation in demo mode unless explicitly forced
+    skip_translate = args.skip_translate
+    if mode == "demo":
+        import os
+        if os.environ.get("DEMO_TRANSLATE", "false").lower() != "true":
+            logger.info("Demo Mode: Skipping translations by default (set DEMO_TRANSLATE=true to enable)")
+            skip_translate = True
+
     published, review, blocked = stage_generate_and_assemble(
-        args.date, run_id, analytics_map, scope_targets, knowledge, args.skip_translate
+        args.date, run_id, analytics_map, scope_targets, knowledge, skip_translate
     )
 
     pipeline_duration = time.time() - pipeline_start
@@ -395,6 +551,9 @@ def main() -> None:
     if not args.skip_evaluate:
         logger.info("--- Stage 4: Quality Evaluation ---")
         stage_evaluate(args.date, pipeline_duration)
+
+    # Stage 5: Publish
+    stage_publish(args.date, mode, args.publish, args.skip_publish)
 
     mins = int(pipeline_duration // 60)
     secs = int(pipeline_duration % 60)

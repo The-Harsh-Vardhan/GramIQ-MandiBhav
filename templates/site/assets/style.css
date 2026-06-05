@@ -342,9 +342,10 @@ main {
    ========================================================================== */
 .hero {
   position: relative;
-  background-image: linear-gradient(rgba(26, 37, 28, 0.82), rgba(26, 37, 28, 0.65)), url('hero-bg.png');
+  background-image: linear-gradient(160deg, rgba(10, 22, 12, 0.78) 0%, rgba(27, 45, 29, 0.62) 60%, rgba(39, 58, 41, 0.5) 100%), url('hero-bg.png');
   background-size: cover;
-  background-position: center;
+  background-position: center 30%;
+  background-attachment: fixed;
   color: #FFFFFF;
   padding: var(--space-3xl) 0 var(--space-2xl);
   border-bottom: 1px solid var(--border);
@@ -800,6 +801,38 @@ main {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--primary);
+}
+
+/* Article Detail Badges */
+.article-type-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.article-date {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.article-title {
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  line-height: 1.2;
+  margin-top: var(--space-sm);
+  color: var(--text-primary);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* ==========================================================================
