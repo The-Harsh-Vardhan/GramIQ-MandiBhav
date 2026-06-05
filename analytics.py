@@ -132,6 +132,12 @@ def compute_analytics(
     today_rows = query_market_data(commodity, date)
     prev_rows = query_previous_day_data(commodity, date)
 
+    if getattr(config, "DEMO_MODE", False):
+        if commodity != "soybean":
+            return {}
+        today_rows = [r for r in today_rows if r.get("state") == "Maharashtra"]
+        prev_rows = [r for r in prev_rows if r.get("state") == "Maharashtra"] if prev_rows else []
+
     if not today_rows:
         logger.warning("No market data for %s on %s", commodity, date)
         return {}
@@ -141,6 +147,54 @@ def compute_analytics(
 
     # Build market summaries with deltas
     market_summaries = _build_market_summaries(today_df, prev_df)
+
+    if getattr(config, "DEMO_MODE", False):
+        # Simplify to Maharashtra Soybean Metrics
+        avg_price = today_df["modal_price"].mean()
+        total_arrivals = today_df["arrival_tonnes"].sum()
+
+        national_day_change_pct = None
+        if prev_df is not None and not prev_df.empty:
+            prev_avg = prev_df["modal_price"].mean()
+            if prev_avg and prev_avg > 0:
+                national_day_change_pct = round(
+                    (avg_price - prev_avg) / prev_avg * 100.0, 2
+                )
+
+        top_row = today_df.loc[today_df["modal_price"].idxmax()]
+        ss = StateSummary(
+            state="Maharashtra",
+            avg_modal_price=round(avg_price, 2),
+            total_arrivals=round(total_arrivals, 2),
+            market_count=len(today_df),
+            top_market=str(top_row["market_name"]),
+            top_market_price=float(top_row["modal_price"]),
+        )
+
+        payload = AnalyticsPayload(
+            commodity=commodity,
+            date=date,
+            article_type="state_market_report",
+            scope_key="soybean_maharashtra",
+            scope_label="Maharashtra",
+            state="Maharashtra",
+            national_avg_modal=round(avg_price, 2),
+            national_day_change_pct=national_day_change_pct,
+            national_total_arrivals=round(total_arrivals, 2),
+            state_summaries=[ss],
+            markets=market_summaries,
+            top_markets_by_price=sorted(market_summaries, key=lambda m: m.modal_price, reverse=True)[:3],
+            bottom_markets_by_price=sorted(market_summaries, key=lambda m: m.modal_price)[:3],
+            market_count=len(market_summaries),
+        )
+        payload = _inject_knowledge(payload, knowledge, date)
+        results = {"soybean_maharashtra": payload}
+
+        logger.info(
+            "Demo Mode: Maharashtra Soybean Analytics computed on %s: 1 scope generated",
+            date
+        )
+        return results
 
     # National-level stats
     national_avg = today_df["modal_price"].mean()
@@ -343,10 +397,7 @@ def build_scope_matrix(date: str, knowledge: dict) -> tuple[dict[str, AnalyticsP
 
     if getattr(config, "DEMO_MODE", False):
         allowed_demo_scopes = {
-            "soybean_national",
             "soybean_maharashtra",
-            "cotton_national",
-            "cotton_gujarat",
         }
         scope_targets = [s for s in scope_targets if s.scope_key in allowed_demo_scopes]
 

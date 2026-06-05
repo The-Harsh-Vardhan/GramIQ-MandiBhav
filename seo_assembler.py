@@ -395,12 +395,58 @@ def assemble_final_article(
         meta = article.meta_description
         body = article.body_html
 
+    keywords = article.keywords
+    if language != "en":
+        lang_kws = {
+            "hi": {
+                "soybean": "सोयाबीन",
+                "soyabean": "सोयाबीन",
+                "cotton": "कपास",
+                "maharashtra": "महाराष्ट्र",
+                "gujarat": "गुजरात",
+                "mandi": "मंडी",
+                "price": "भाव",
+                "bhav": "भाव",
+                "market": "बाजार",
+            },
+            "mr": {
+                "soybean": "सोयाबीन",
+                "soyabean": "सोयाबीन",
+                "cotton": "कापूस",
+                "maharashtra": "महाराष्ट्र",
+                "gujarat": "गुजरात",
+                "mandi": "मंडी",
+                "price": "भाव",
+                "bhav": "भाव",
+                "market": "बाजार",
+            },
+            "gu": {
+                "soybean": "સોયાબીન",
+                "soyabean": "સોયાબીન",
+                "cotton": "કપાસ",
+                "maharashtra": "મહારાષ્ટ્ર",
+                "gujarat": "ગુજરાત",
+                "mandi": "મંડી",
+                "price": "ભાવ",
+                "bhav": "ભાવ",
+                "market": "બજાર",
+            }
+        }
+        mapping = lang_kws.get(language, {})
+        translated_kws = []
+        for kw in keywords:
+            mapped_kw = kw
+            for eng_w, local_w in mapping.items():
+                mapped_kw = re.sub(r'\b' + re.escape(eng_w) + r'\b', local_w, mapped_kw, flags=re.IGNORECASE)
+            translated_kws.append(mapped_kw)
+        keywords = translated_kws
+
     # Rebuild article object for JSON-LD with correct title/meta
     rendering_article = ArticleOutput(
         title=title,
         meta_description=meta,
         body_html=body,
-        keywords=article.keywords,
+        keywords=keywords,
         market_summary_table=article.market_summary_table,
         faqs=article.faqs,
     )
@@ -419,7 +465,7 @@ def assemble_final_article(
         title=title,
         meta_description=meta,
         body=body,
-        keywords=article.keywords,
+        keywords=keywords,
         language=language,
         date=analytics.date,
         commodity=analytics.commodity,
@@ -471,7 +517,13 @@ def write_article_file(
     try:
         cache_dir = output_dir / "json"
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = cache_dir / f"article_{scope}_{lang}.json"
+        
+        # Determine cache name
+        cache_name = f"article_{scope}_{lang}.json"
+        if getattr(config, "DEMO_MODE", False) and scope == "soybean_maharashtra":
+            cache_name = f"article_soybean_maharashtra_latest_{lang}.json"
+            
+        cache_path = cache_dir / cache_name
         with open(cache_path, "w", encoding="utf-8") as f:
             json.dump(final_article.model_dump(), f, ensure_ascii=False, indent=2)
         logger.debug("Cached copy written: %s", cache_path)

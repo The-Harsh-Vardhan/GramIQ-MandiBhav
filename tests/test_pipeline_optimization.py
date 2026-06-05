@@ -283,3 +283,61 @@ def test_schema_discovery_mode(monkeypatch):
     # If initialization completed without crashing, it succeeded.
     assert provider is not None
 
+
+def test_fallback_generation_and_translation(monkeypatch):
+    import config
+    import llm_engine
+    import translator
+    from schemas import ScopeTarget, ArticleOutput
+
+    # Configure quota_exhausted_mode = True to force local fallbacks
+    monkeypatch.setattr(config, "quota_exhausted_mode", True)
+
+    payload = _sample_payload(scope_key="soybean_maharashtra")
+    payload.article_type = "state_market_report"
+    payload.state = "Maharashtra"
+    payload.scope_label = "Maharashtra"
+    
+    config.analytics_payloads_cache = {"soybean_maharashtra": payload}
+
+    scope_targets = {
+        "soybean_maharashtra": ScopeTarget(
+            commodity="soybean",
+            article_type="state_market_report",
+            scope_key="soybean_maharashtra",
+            scope_label="Maharashtra",
+            state="Maharashtra",
+        )
+    }
+
+    # Test generation fallback
+    articles = llm_engine.generate_articles_for_commodity(
+        "soybean",
+        "2026-06-04",
+        {"soybean_maharashtra": payload},
+        scope_targets,
+    )
+
+    assert "soybean_maharashtra" in articles
+    article = articles["soybean_maharashtra"]
+    assert isinstance(article, ArticleOutput)
+    
+    # Verify quality constraints
+    from seo_assembler import validate_article_quality
+    assert validate_article_quality(article) is True
+    
+    # Test translation fallback
+    translations = translator.translate_articles(
+        "soybean",
+        articles,
+        {"soybean_maharashtra": ["hi", "mr", "gu"]},
+    )
+
+    assert "soybean_maharashtra" in translations
+    langs = translations["soybean_maharashtra"]
+    assert set(langs.keys()) == {"hi", "mr", "gu"}
+    for lang_code, trans in langs.items():
+        assert trans.numeric_integrity_passed is True
+        assert trans.length_ratio > 0.5
+        assert "gramiq" in trans.body_html.lower()
+

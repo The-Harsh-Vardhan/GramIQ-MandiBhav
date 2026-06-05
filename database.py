@@ -221,6 +221,19 @@ def query_previous_day_data(commodity: str, market_date: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def query_latest_available_date(commodity: str) -> Optional[str]:
+    """Query the database to find the latest date for which records have been ingested."""
+    sql = """
+        SELECT MAX(market_date) as latest_date FROM market_data
+        WHERE commodity_slug = ?
+    """
+    with get_connection() as conn:
+        row = conn.execute(sql, (commodity.lower(),)).fetchone()
+        if row and row["latest_date"]:
+            return row["latest_date"]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Article operations
 # ---------------------------------------------------------------------------

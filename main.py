@@ -36,6 +36,8 @@ def _find_cached_output(date: str, scope_key: str, language: str) -> Path | None
         config.OUTPUT_DIR / date / "blocked" / f"{scope_key}_{language}.json",
         config.OUTPUT_DIR / "json" / f"article_{scope_key}_{language}.json",
     ]
+    if getattr(config, "DEMO_MODE", False) and scope_key == "soybean_maharashtra":
+        candidates.append(config.OUTPUT_DIR / "json" / f"article_soybean_maharashtra_latest_{language}.json")
     for path in candidates:
         if path.exists():
             return path
@@ -244,7 +246,7 @@ def stage_generate_and_assemble(
             else:
                 missing_generation[scope.scope_key] = payload
 
-        if missing_generation and not getattr(config, "quota_exhausted_mode", False):
+        if missing_generation:
             generated = generate_articles_for_commodity(
                 commodity, date, missing_generation, scope_lookup
             )
@@ -283,7 +285,7 @@ def stage_generate_and_assemble(
                     translation_requests[scope_key] = missing_langs
 
         batched_translations = {}
-        if translation_requests and not getattr(config, "quota_exhausted_mode", False):
+        if translation_requests:
             batched_translations = translate_articles(
                 commodity,
                 {scope_key: article_inputs[scope_key] for scope_key in translation_requests},
@@ -499,6 +501,8 @@ def main() -> None:
 
     # Determine commodities to process
     commodities = args.commodities or config.COMMODITIES
+    if mode == "demo":
+        commodities = ["soybean"]
     logger.info("Commodities: %s", ", ".join(commodities))
 
     # Log pipeline run
@@ -509,9 +513,18 @@ def main() -> None:
     logger.info("--- Stage 1: Data Ingestion ---")
     stage_ingest(args.date, commodities)
 
+    # Resolve Latest Available Date for demo mode after ingestion
+    if mode == "demo":
+        from database import query_latest_available_date
+        latest_date = query_latest_available_date("soybean")
+        if latest_date:
+            logger.info("Demo Mode: Overriding target date from %s to latest available date %s", args.date, latest_date)
+            args.date = latest_date
+
     # Stage 2: Analytics
     logger.info("--- Stage 2: Analytics Pre-Computation ---")
     analytics_map, scope_targets = stage_analytics(args.date, knowledge)
+    config.analytics_payloads_cache = analytics_map
 
     if not scope_targets:
         logger.error("No scope targets built — check if market data was ingested correctly.")

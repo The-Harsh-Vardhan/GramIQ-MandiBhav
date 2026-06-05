@@ -82,6 +82,7 @@ PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "demo")  # "dev" | "live" |
 DEMO_MODE: bool = (os.environ.get("DEMO_MODE", "false").lower() == "true") or (PIPELINE_MODE == "demo")
 DEBUG_OGD_SCHEMA: bool = os.environ.get("DEBUG_OGD_SCHEMA", "false").lower() == "true"
 quota_exhausted_mode: bool = False
+analytics_payloads_cache: dict = {}
 
 OGD_API_KEY: str = os.environ.get("OGD_API_KEY", "")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
