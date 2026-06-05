@@ -95,6 +95,7 @@ class MockProvider(DataProvider):
         return records
 
     def fetch_market_data(self, date: str, commodity: str) -> list[MarketRecord]:
+        config.ingestion_data_source = "MOCK"
         csv_path = self.mock_dir / f"{commodity}_sample.csv"
         records = self._load_csv(csv_path, override_date=date)
         if getattr(config, "DEMO_MODE", False):
@@ -466,6 +467,7 @@ class LiveProvider(DataProvider):
         return records
 
     def fetch_market_data(self, date: str, commodity: str, limit: Optional[int] = None) -> list[MarketRecord]:
+        config.ingestion_data_source = "LIVE"
         commodity_key = commodity.lower()
         filter_values = OGD_COMMODITY_FILTERS.get(commodity_key, [commodity.title()])
         all_raw: list[dict] = []
@@ -540,6 +542,7 @@ class LiveProvider(DataProvider):
 
             if not all_raw:
                 logger.warning("Demo Mode: No live OGD data found for Nagpur/fallback markets. Falling back to MockProvider.")
+                config.ingestion_data_source = "MOCK"
                 mock_provider = MockProvider()
                 mock_records = mock_provider.fetch_market_data(date, commodity)
                 config.demo_chosen_market = "Nagpur"
@@ -598,6 +601,7 @@ class LiveProvider(DataProvider):
             # --- Step 4: Fallback to Mock ---
             if not all_raw:
                 logger.warning("All OGD API queries returned 0 records for %s on %s. Falling back to MockProvider.", commodity, date)
+                config.ingestion_data_source = "MOCK"
                 mock_provider = MockProvider()
                 return mock_provider.fetch_market_data(date, commodity)
 
@@ -743,12 +747,10 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
 
     if not records:
         logger.warning("No records fetched for %s on %s", commodity, date)
-        if getattr(config, "DEMO_MODE", False):
-            config.demo_records_count = 0
+        config.demo_records_count = 0
         return []
 
-    if getattr(config, "DEMO_MODE", False):
-        config.demo_records_count = len(records)
+    config.demo_records_count = len(records)
 
     source = "mock" if isinstance(actual_provider, MockProvider) else "ogd_api"
     inserted = insert_market_records(records, source=source)

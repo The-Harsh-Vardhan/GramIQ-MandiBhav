@@ -240,6 +240,15 @@ def stage_generate_and_assemble(
                 continue
 
             cached_en = _find_cached_output(date, scope.scope_key, "en")
+
+            # Resolve data source status
+            ingestion_source = getattr(config, "ingestion_data_source", "LIVE")
+            if cached_en:
+                ds_status = "LIVE_PLUS_CACHE" if ingestion_source == "LIVE" else "CACHE"
+            else:
+                ds_status = "LIVE" if ingestion_source == "LIVE" else "MOCK"
+            payload.data_source_status = ds_status
+
             if cached_en:
                 article_inputs[scope.scope_key], cached_meta[scope.scope_key] = _load_cached_article_output(
                     cached_en, payload, scope
@@ -603,6 +612,10 @@ def main() -> None:
         else:
             pub_status = "✓" if getattr(config, "demo_publish_ok", False) else "✗"
 
+        # Get data source status for nagpur demo
+        nagpur_payload = analytics_map.get("soybean_nagpur")
+        ds_status = nagpur_payload.data_source_status if nagpur_payload else getattr(config, "ingestion_data_source", "LIVE")
+
         summary = f"""
 OGD Fetch:
 Commodity: Soybean
@@ -624,7 +637,7 @@ Hindi {trans_hi}
 Marathi {trans_mr}
 
 Publishing:
-GitHub Pages {pub_status}
+GitHub Pages {pub_status} (Data Source: {ds_status})
 """
         try:
             print(summary)

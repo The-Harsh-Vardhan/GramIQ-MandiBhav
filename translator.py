@@ -824,6 +824,40 @@ def _generate_mr_nagpur_demo(payload: AnalyticsPayload) -> str:
 """
     return body
 
+def clean_translated_body(body: str, lang_code: str, scope_key: str, payload: Optional[AnalyticsPayload]) -> str:
+    avg_price = payload.national_avg_modal if payload else 0
+    total_arrivals = payload.national_total_arrivals if payload else 0
+    atype = payload.article_type if payload else "state_market_report"
+
+    if lang_code == "hi":
+        body = re.sub(r"क्रशर|ऑयल मिल|तेल मिल|प्रोसेसर|प्रक्रियादार", "खरीदार", body)
+        body = re.sub(r"तरलता|लिक्विडिटी", "गतिविधि", body)
+        if scope_key == "soybean_nagpur" or atype == "nagpur_demo":
+            body = re.sub(r"महाराष्ट्र के कृषि मंडी नेटवर्क|महाराष्ट्र के मंडी नेटवर्क|महाराष्ट्र की मंडियों", "नागपुर मंडी", body)
+            body = re.sub(r"क्षेत्रीय व्यापार|प्रादेशिक व्यापार", "स्थानीय व्यापार", body)
+            body = re.sub(r"मुख्य जिलों में|क्षेत्र के मुख्य जिलों में", "स्थानीय मंडी में", body)
+            body = re.sub(r"महाराष्ट्र-व्यापी|महाराष्ट्र-वाइड|महाराष्ट्र भर में", "नागपुर", body)
+        if avg_price == 0 or total_arrivals == 0:
+            body = re.sub(r"नीलामी चबूतरे दिनभर व्यस्त रहे।?|तौल और भराई का काम निपटाया।?", "दैनिक बिक्री सामान्य रूप से पूरी हुई।", body)
+            body = re.sub(r"सक्रिय आवक और आवक के मजबूत प्रवाह|सक्रिय आवक|मजबूत आवक|बड़ी आवक|भारी आवक", "व्यापारिक गतिविधि", body)
+            body = re.sub(r"आवक की मजबूत गति|आवक की गति", "व्यापारिक गतिविधि", body)
+            body = re.sub(r"आपूर्ति के इस भारी प्रवाह|आपूर्ति का भारी प्रवाह", "दैनिक बिक्री", body)
+    elif lang_code == "mr":
+        body = re.sub(r"क्रशर|ऑइल मिल|तेल गिरण्या|प्रक्रियादार", "खरेदीदार", body)
+        body = re.sub(r"तरलता|लिक्विडिटी", "उलाढाल", body)
+        if scope_key == "soybean_nagpur" or atype == "nagpur_demo":
+            body = re.sub(r"महाराष्ट्रातील कृषी उत्पन्न बाजार समित्यांमध्ये|महाराष्ट्रातील बाजार समित्यांमध्ये", "नागपूर बाजार समितीत", body)
+            body = re.sub(r"प्रादेशिक व्यापार|क्षेत्रीय व्यापार", "स्थानिक व्यापार", body)
+            body = re.sub(r"राज्यातील मुख्य जिल्ह्यांमध्ये|मुख्य बाजार आवारात", "स्थानिक बाजार समितीत", body)
+            body = re.sub(r"महाराष्ट्र-व्यापी|महाराष्ट्र-वाइड", "नागपूर", body)
+        if avg_price == 0 or total_arrivals == 0:
+            body = re.sub(r"लिलाव चबूतरे दिवसभर व्यस्त होते।?|तोलाई व पोते भरण्याचे काम वेळेत पूर्ण केले।?", "दैनिक विक्री सामान्यपणे पूर्ण झाली.", body)
+            body = re.sub(r"सक्रिय आवक आणि आवकच्या मजबूत प्रवाहामुळे|सक्रिय आवक|मजबूत आवक|मोठी आवक|भारी आवक", "व्यापारी उलाढाल", body)
+            body = re.sub(r"आवकचा वेग|आवकचा जोरदार वेग", "व्यापारी उलाढाल", body)
+            body = re.sub(r"पुरवठ्याच्या या मोठ्या प्रवाहामुळे|पुरवठ्याचा मोठा प्रवाह", "दैनिक विक्री", body)
+
+    return body
+
 def _generate_fallback_translation(
     scope_key: str,
     lang_code: str,
@@ -926,6 +960,8 @@ def _generate_fallback_translation(
         body = _generate_hi_state_report(payload, table_html) if lang_code == "hi" else (
             _generate_mr_state_report(payload, table_html) if lang_code == "mr" else _generate_gu_state_report(payload, table_html)
         )
+
+    body = clean_translated_body(body, lang_code, scope_key, payload)
 
     if config.CTA_FOOTER_HTML not in body:
         body = body.strip() + "\n" + config.CTA_FOOTER_HTML

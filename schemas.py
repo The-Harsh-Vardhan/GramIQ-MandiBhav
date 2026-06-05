@@ -109,6 +109,8 @@ class AnalyticsPayload(BaseModel):
     season_note: Optional[str] = None
     commodity_description: Optional[str] = None
     market_significance: Optional[str] = None      # For spotlight articles
+    record_count: int = 0
+    data_source_status: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +164,9 @@ class ArticleDraft(BaseModel):
     """Minimal creative payload returned by Gemini before Python assembly."""
     title: str = Field(min_length=10, max_length=120)
     body_html: str = Field(min_length=200)
+    observed_facts: list[str] = Field(default_factory=list)
+    safe_inferences: list[str] = Field(default_factory=list)
+    blocked_claims: list[str] = Field(default_factory=list)
 
     @field_validator("body_html", mode="after")
     @classmethod
@@ -212,3 +217,12 @@ class FinalArticleJSON(BaseModel):
     publish_status: str         # "published" | "review_required" | "blocked"
     pipeline_run_id: str
     generated_at: str           # ISO datetime
+    credibility_score: float = 0.0
+    data_source_status: str = "LIVE"
+    report_type: str = "FULL_REPORT"
+    contradictions_count: int = 0
+    unsupported_claims_count: int = 0
+    scope_violations_count: int = 0
+    truthfulness_score: float = 1.0
+    fallback_disclosure_present: bool = True
+    data_source_disclosure_present: bool = True

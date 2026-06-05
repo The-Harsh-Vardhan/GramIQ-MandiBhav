@@ -181,6 +181,8 @@ def compute_analytics(
             market_count=len(market_summaries),
         )
         payload = _inject_knowledge(payload, knowledge, date)
+        payload.record_count = getattr(config, "demo_records_count", 0)
+        payload.data_source_status = getattr(config, "ingestion_data_source", "LIVE")
         results = {"soybean_nagpur": payload}
 
         logger.info(
@@ -356,6 +358,10 @@ def compute_analytics(
     )
     gainers_payload = _inject_knowledge(gainers_payload, knowledge, date)
     results[gainers_key] = gainers_payload
+
+    for payload in results.values():
+        payload.record_count = getattr(config, "demo_records_count", 0)
+        payload.data_source_status = getattr(config, "ingestion_data_source", "LIVE")
 
     logger.info(
         "Analytics computed for %s on %s: %d scopes generated",

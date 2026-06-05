@@ -24,13 +24,16 @@ from seo_assembler import assemble_article_output
 
 logger = logging.getLogger("mandibhav.llm_engine")
 
-class ScopeArticleDraft(BaseModel):
+class ScopeArticleStage1Draft(BaseModel):
     scope_key: str = Field(description="The unique key identifier for the scope target.")
+    observed_facts: list[str] = Field(description="Stage 1: List of observed facts derived ONLY from the analytics payload (prices, arrivals, MSP, date, market names).")
+    safe_inferences: list[str] = Field(description="Stage 1: List of safe, data-grounded inferences. No future predictions or demand analysis.")
+    blocked_claims: list[str] = Field(description="Stage 1: List of blocked/unsupported claims (e.g. processor/crusher demand, liquidity, future price projections) that must be avoided.")
     title: str = Field(min_length=10, max_length=120, description="Creative English article title.")
-    body_html: str = Field(min_length=200, description="Clean HTML article body with semantic headings (h2, h3) and paragraphs.")
+    body_html: str = Field(min_length=200, description="Stage 2: Prose of clean HTML article body generated using ONLY the items in observed_facts and safe_inferences. Never use items in blocked_claims.")
 
 class BatchArticleResponse(BaseModel):
-    articles: list[ScopeArticleDraft] = Field(description="List of generated articles, one for each input scope_key.")
+    articles: list[ScopeArticleStage1Draft] = Field(description="List of generated articles, one for each input scope_key.")
 
 _client: Optional[genai.Client] = None
 
@@ -227,24 +230,21 @@ def _build_batch_prompt(
         "task": (
             "Write one detailed English article for each scope in the 'scopes' list. "
             "Follow the 'writing_instructions' provided for each scope exactly. "
-            "Each article must be between 400 and 700 words of clean HTML. "
-            "Write high-quality agricultural journalism with deep farmer-centric analysis."
+            "Each article must be between 400 and 700 words of clean HTML."
         ),
+        "two_stage_generation_rules": [
+            "Stage 1: Generate observed_facts, safe_inferences, and blocked_claims based strictly on the analytics payload.",
+            "Stage 2: Generate title and body_html using ONLY the observed_facts and safe_inferences. Never include any blocked_claims or unsupported claims.",
+            "Strictly avoid any predictions, future outlook, demand analysis (e.g. crusher demand, processor demand, oil mill demand), or liquidity references.",
+            "If arrivals = 0, do not mention supply influx, active/busy markets, or weighing/bagging operations.",
+            "If market count/record count is small, do not make regional or statewide generalizations."
+        ],
         "article_rules": [
             "Keep all numbers exact and grounded in the provided data.",
             "No markdown outside HTML tags. Use semantic HTML (<h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <strong>).",
             "Ensure the article body includes all the required sections from the writing_instructions.",
             "Do not add FAQs, SEO metadata, keywords, or JSON-LD in the response body.",
         ],
-        "output_schema": {
-            "articles": [
-                {
-                    "scope_key": "string",
-                    "title": "string",
-                    "body_html": "string",
-                }
-            ]
-        },
         "scopes": scopes_data,
     }
     return json.dumps(instructions, ensure_ascii=False)
@@ -343,6 +343,9 @@ def _parse_batch_response(raw_text: str) -> dict[str, ArticleDraft]:
         parsed[scope_key] = ArticleDraft(
             title=item["title"],
             body_html=item["body_html"],
+            observed_facts=item.get("observed_facts", []),
+            safe_inferences=item.get("safe_inferences", []),
+            blocked_claims=item.get("blocked_claims", []),
         )
     return parsed
 
@@ -626,6 +629,36 @@ def _generate_nagpur_demo_fallback(payload: AnalyticsPayload) -> str:
 
 def _generate_fallback_draft(payload: AnalyticsPayload, scope: ScopeTarget) -> ArticleDraft:
     atype = payload.article_type
+    commodity = payload.commodity.title()
+    date = payload.date
+    market_name = scope.market or payload.market or scope.scope_label
+    avg_price = payload.national_avg_modal
+    total_arrivals = payload.national_total_arrivals
+    msp_val = payload.msp_current_year or (4892.0 if payload.commodity == "soybean" else 7121.0)
+    price_vs_msp_pct = payload.price_vs_msp_pct or 0.0
+    price_vs_msp_dir = payload.price_vs_msp_direction or "aligned with"
+    record_count = payload.record_count
+
+    # Base observed facts and inferences
+    observed_facts = [
+        f"Commodity: {commodity}",
+        f"Location: {market_name}",
+        f"Date: {date}",
+        f"Modal Price: Rs {avg_price:,.0f} per quintal",
+        f"Arrivals: {total_arrivals:,.1f} tonnes",
+        f"MSP: Rs {msp_val:,.0f} per quintal",
+        f"Records Analyzed: {record_count}"
+    ]
+
+    safe_inferences = [
+        f"The price of {commodity} is {price_vs_msp_pct:.1f}% {price_vs_msp_dir} the MSP of Rs {msp_val:,.0f}."
+    ]
+
+    blocked_claims = [
+        "crusher demand", "oil mill demand", "processor demand", "liquidity",
+        "future predictions", "market trend analysis"
+    ]
+
     if atype == "daily_commodity_report":
         body = _generate_daily_report_fallback(payload)
     elif atype == "state_market_report":
@@ -640,8 +673,36 @@ def _generate_fallback_draft(payload: AnalyticsPayload, scope: ScopeTarget) -> A
         body = _generate_nagpur_demo_fallback(payload)
     else:
         body = _generate_state_report_fallback(payload)
-    title = f"{payload.commodity.title()} Mandi Bhav Today {scope.scope_label}"
-    return ArticleDraft(title=title, body_html=body)
+
+    # Apply post-processing sanitization regexes to ensure clean, factual text
+    body = re.sub(r"\bcrushers?\b", "buyers", body, flags=re.IGNORECASE)
+    body = re.sub(r"\boil mills?\b", "processors", body, flags=re.IGNORECASE)
+    body = re.sub(r"\bprocessors?\b", "buyers", body, flags=re.IGNORECASE)
+    body = re.sub(r"\bliquidity\b", "activity", body, flags=re.IGNORECASE)
+    body = re.sub(r"\bmacroeconomic factors and shipping logistics\b", "market parameters", body, flags=re.IGNORECASE)
+
+    if scope.scope_key == "soybean_nagpur":
+        body = re.sub(r"\bacross Maharashtra\b", "in Nagpur", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bregional trade flows\b", "local trade flows", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bkey districts in the region\b", "local market platforms", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bstrong regional trade integration\b", "local trade activity", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bacross the mandi network\b", "at Nagpur APMC", body, flags=re.IGNORECASE)
+
+    if total_arrivals == 0:
+        body = re.sub(r"\bsubstantial influx of supply\b", "trading session", body, flags=re.IGNORECASE)
+        body = re.sub(r"\binflux of supply\b", "trading session", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bbusy throughout the day\b", "completed normally", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bbagging and weighing operations\b", "daily sales", body, flags=re.IGNORECASE)
+        body = re.sub(r"\bactive trade activity\b", "market activity", body, flags=re.IGNORECASE)
+
+    title = f"{commodity} Mandi Bhav Today: {market_name}"
+    return ArticleDraft(
+        title=title,
+        body_html=body,
+        observed_facts=observed_facts,
+        safe_inferences=safe_inferences,
+        blocked_claims=blocked_claims
+    )
 
 
 def generate_articles_for_commodity(

@@ -55,6 +55,14 @@ class ArticleMetrics:
     faq_json_ld_valid: bool = False
     h2_count: int = 0
 
+    # Truthfulness
+    contradictions_count: int = 0
+    unsupported_claims_count: int = 0
+    scope_violations_count: int = 0
+    fallback_disclosure_present: bool = True
+    data_source_disclosure_present: bool = True
+    truthfulness_score: float = 1.0
+
 
 @dataclass
 class EvaluationReport:
@@ -82,6 +90,14 @@ class EvaluationReport:
     avg_confidence: float = 0.0
     min_confidence: float = 1.0
     max_confidence: float = 0.0
+
+    # Truthfulness
+    total_contradictions: int = 0
+    total_unsupported_claims: int = 0
+    total_scope_violations: int = 0
+    pct_fallback_disclosure: float = 0.0
+    pct_data_source_disclosure: float = 0.0
+    avg_truthfulness_score: float = 1.0
 
     article_metrics: list[ArticleMetrics] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -161,6 +177,13 @@ def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
         json_ld_valid=_validate_json_ld(json_ld, "NewsArticle"),
         faq_json_ld_valid=_validate_json_ld(faq_json_ld, "FAQPage"),
         h2_count=h2_count,
+        # Truthfulness
+        contradictions_count=data.get("contradictions_count", 0),
+        unsupported_claims_count=data.get("unsupported_claims_count", 0),
+        scope_violations_count=data.get("scope_violations_count", 0),
+        fallback_disclosure_present=data.get("fallback_disclosure_present", True),
+        data_source_disclosure_present=data.get("data_source_disclosure_present", True),
+        truthfulness_score=data.get("truthfulness_score", 1.0),
     )
 
 
@@ -228,6 +251,14 @@ def generate_report(date: str, output_dir: Path = OUTPUT_DIR) -> EvaluationRepor
     report.min_confidence = round(min(scores), 3)
     report.max_confidence = round(max(scores), 3)
 
+    # Truthfulness
+    report.total_contradictions = sum(m.contradictions_count for m in metrics_list)
+    report.total_unsupported_claims = sum(m.unsupported_claims_count for m in metrics_list)
+    report.total_scope_violations = sum(m.scope_violations_count for m in metrics_list)
+    report.pct_fallback_disclosure = _pct(sum(1 for m in metrics_list if m.fallback_disclosure_present), n)
+    report.pct_data_source_disclosure = _pct(sum(1 for m in metrics_list if m.data_source_disclosure_present), n)
+    report.avg_truthfulness_score = round(sum(m.truthfulness_score for m in metrics_list) / n, 3)
+
     # Warnings for low performers
     for m in metrics_list:
         if not m.word_count_ok:
@@ -238,6 +269,14 @@ def generate_report(date: str, output_dir: Path = OUTPUT_DIR) -> EvaluationRepor
             report.warnings.append(f"{m.scope_key} ({m.language}): GramIQ CTA missing")
         if m.confidence_score < 0.40:
             report.warnings.append(f"{m.scope_key} ({m.language}): low confidence {m.confidence_score:.3f}")
+        if m.contradictions_count > 0:
+            report.warnings.append(f"{m.scope_key} ({m.language}): {m.contradictions_count} factual contradictions found")
+        if m.truthfulness_score < 0.80:
+            report.warnings.append(f"{m.scope_key} ({m.language}): low truthfulness score {m.truthfulness_score:.3f}")
+        if not m.fallback_disclosure_present:
+            report.warnings.append(f"{m.scope_key} ({m.language}): fallback disclosure missing")
+        if not m.data_source_disclosure_present:
+            report.warnings.append(f"{m.scope_key} ({m.language}): data source disclosure missing")
 
     return report
 
@@ -288,6 +327,14 @@ def print_report(report: EvaluationReport, pipeline_time_seconds: float = 0.0) -
         f"  ├── Average:                  {report.avg_confidence:.3f}",
         f"  ├── Minimum:                  {report.min_confidence:.3f}",
         f"  └── Maximum:                  {report.max_confidence:.3f}",
+        "",
+        "  TRUTHFULNESS & TRANSPARENCY",
+        f"  ├── Contradictions:           {report.total_contradictions}  {'✅' if report.total_contradictions == 0 else '❌'}",
+        f"  ├── Unsupported claims:       {report.total_unsupported_claims}  {'✅' if report.total_unsupported_claims == 0 else '⚠️'}",
+        f"  ├── Scope violations:         {report.total_scope_violations}  {'✅' if report.total_scope_violations == 0 else '⚠️'}",
+        f"  ├── Fallback disclosure:      {report.pct_fallback_disclosure}%  {'✅' if report.pct_fallback_disclosure == 100.0 else '⚠️'}",
+        f"  ├── Data source disclosure:   {report.pct_data_source_disclosure}%  {'✅' if report.pct_data_source_disclosure == 100.0 else '❌'}",
+        f"  └── Avg truthfulness score:   {report.avg_truthfulness_score:.3f}  {'✅' if report.avg_truthfulness_score >= 0.80 else '❌'}",
         "",
     ]
 
@@ -351,6 +398,14 @@ def save_report_json(report: EvaluationReport, output_dir: Path = OUTPUT_DIR) ->
             "average": report.avg_confidence,
             "min": report.min_confidence,
             "max": report.max_confidence,
+        },
+        "truthfulness": {
+            "total_contradictions": report.total_contradictions,
+            "total_unsupported_claims": report.total_unsupported_claims,
+            "total_scope_violations": report.total_scope_violations,
+            "pct_fallback_disclosure": report.pct_fallback_disclosure,
+            "pct_data_source_disclosure": report.pct_data_source_disclosure,
+            "avg_truthfulness_score": report.avg_truthfulness_score,
         },
         "warnings": report.warnings,
         "errors": report.errors,

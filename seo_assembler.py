@@ -167,6 +167,104 @@ def generate_seo_metadata(
     return title, desc, final_keywords[:10]
 
 
+def validate_article_truthfulness(
+    body_html: str,
+    analytics: AnalyticsPayload,
+    scope: ScopeTarget
+) -> tuple[int, int, int, float]:
+    """
+    Validates the article body content against factual truthfulness rules.
+    Returns (contradictions, unsupported_claims, scope_violations, truthfulness_score).
+    """
+    contradictions = 0
+    body_lower = body_html.lower()
+    
+    # Check arrivals = 0 contradictions
+    if analytics.national_total_arrivals == 0:
+        forbid_arrivals_zero = [
+            "heavy arrivals", "strong supply", "substantial influx", "busy market",
+            "influx of supply", "active trade", "active market", "bagging and weighing"
+        ]
+        for term in forbid_arrivals_zero:
+            if term in body_lower:
+                contradictions += 1
+                logger.warning("Factual Contradiction: Arrivals is 0 but body contains '%s'", term)
+                
+    # Check low record count (< 5) contradictions
+    if analytics.record_count < 5:
+        forbid_low_records = [
+            "trend", "regional demand", "market momentum", "future outlook", "market trends"
+        ]
+        for term in forbid_low_records:
+            if term in body_lower:
+                contradictions += 1
+                logger.warning("Factual Contradiction: record_count is %d (< 5) but body contains '%s'", analytics.record_count, term)
+
+    # 2. Unsupported Claims (Allowed Facts only)
+    unsupported_claims = 0
+    forbid_unsupported = [
+        "crusher", "oil mill", "processor", "liquidity", "macroeconomic", "shipping logistics"
+    ]
+    for term in forbid_unsupported:
+        if term in body_lower:
+            unsupported_claims += 1
+            logger.warning("Unsupported Claim: Body contains term '%s' which is not in allowed facts", term)
+
+    # 3. Scope Consistency
+    scope_violations = 0
+    if scope.scope_key == "soybean_nagpur":
+        forbid_broad_scope = [
+            "maharashtra-wide", "regional economy", "national soybean market",
+            "across maharashtra", "regional trade flows", "key districts in the region"
+        ]
+        for term in forbid_broad_scope:
+            if term in body_lower:
+                scope_violations += 1
+                logger.warning("Scope Consistency Violation: Nagpur scope but body contains broad term '%s'", term)
+
+    # 4. Truthfulness Score Calculation
+    # Start at 1.0. Deduct 0.5 per contradiction. Deduct 0.1 per unsupported claim / scope violation.
+    score = 1.0 - (0.5 * contradictions) - (0.1 * unsupported_claims) - (0.1 * scope_violations)
+    
+    score = round(max(0.0, score), 3)
+    return contradictions, unsupported_claims, scope_violations, score
+
+
+def compute_credibility(
+    data_source_status: str,
+    record_count: int,
+    generation_successful: bool,
+    translation_successful: bool,
+    contradictions_count: int
+) -> float:
+    if contradictions_count > 0:
+        return 0.0
+
+    # Determine base score
+    if data_source_status == "LIVE":
+        base = 0.80 + 0.15 * min(record_count / 15.0, 1.0)
+    elif data_source_status == "LIVE_PLUS_CACHE":
+        base = 0.80 + 0.15 * min(record_count / 15.0, 1.0)
+    elif data_source_status == "CACHE":
+        base = 0.75 if getattr(config, "ingestion_data_source", "LIVE") == "LIVE" else 0.55
+    else: # MOCK
+        base = 0.60 + 0.10 * min(record_count / 15.0, 1.0)
+    
+    # Penalties
+    if not generation_successful:
+        base *= 0.9
+    if not translation_successful:
+        base *= 0.8
+        
+    score = round(base, 3)
+    
+    # Caps
+    if "MOCK" in data_source_status or data_source_status == "CACHE":
+        score = min(score, 0.70)
+        
+    return max(0.0, min(score, 1.0))
+
+
 def compute_confidence(
     article: ArticleOutput,
     analytics: AnalyticsPayload,
@@ -174,59 +272,58 @@ def compute_confidence(
     keywords: list[str],
 ) -> tuple[float, str]:
     """
-    Compute a heuristic confidence score (0.0-1.0).
-    Returns (score, publish_status).
-
-    Formula: confidence = data_completeness_score * generation_success_score * translation_success_score
+    Compute a credibility score and verify truthfulness gate.
     """
-    # 1. data_completeness_score: Fraction vs min_required
-    if "national" in analytics.scope_key or analytics.article_type == "daily_commodity_report":
-        min_required = 5
-    elif "state" in analytics.scope_key or analytics.article_type == "state_market_report":
-        min_required = 2
-    else:
-        min_required = 1
-
-    reporting_markets = analytics.market_count
-    fraction = reporting_markets / min_required
-    data_completeness_score = min(fraction, 1.0)
-
-    # Penalized by 0.8 if historical change (national_day_change_pct) is missing
-    if analytics.national_day_change_pct is None:
-        data_completeness_score *= 0.8
-
-    # 2. generation_success_score: 1.0 if passes validation, else 0.0
+    # 1. Check quality validation first
     is_valid = validate_article_quality(article)
-    generation_success_score = 1.0 if is_valid else 0.0
-
-    # 3. translation_success_score: Average of numeric_integrity_passed (default 1.0 if EN-only)
-    if translations:
-        trans_scores = [1.0 if t.numeric_integrity_passed else 0.0 for t in translations.values()]
-        translation_success_score = sum(trans_scores) / len(trans_scores)
-    else:
-        translation_success_score = 1.0
-
-    score = data_completeness_score * generation_success_score * translation_success_score
-    score = round(score, 3)
-
-    # If quality checks fail, status is blocked and confidence is 0.0
     if not is_valid:
-        score = 0.0
-        status = "blocked"
+        return 0.0, "blocked"
+
+    # 2. Check truthfulness of the generated English article
+    scope = ScopeTarget(
+        commodity=analytics.commodity,
+        article_type=analytics.article_type,
+        scope_key=analytics.scope_key,
+        scope_label=analytics.scope_label,
+        state=analytics.state,
+        market=analytics.market,
+    )
+    contradictions, unsupported, scope_viols, truth_score = validate_article_truthfulness(
+        article.body_html, analytics, scope
+    )
+
+    # 3. Determine data source status
+    data_source = analytics.data_source_status or "LIVE"
+
+    # 4. Check if local fallback generation was used
+    generation_successful = not getattr(config, "quota_exhausted_mode", False)
+
+    # 5. Check if translations were successful
+    translation_successful = True
+    if translations:
+        translation_successful = all(t.translation_provider != "local_fallback" for t in translations.values())
+
+    # 6. Compute credibility score
+    cred_score = compute_credibility(
+        data_source_status=data_source,
+        record_count=analytics.record_count,
+        generation_successful=generation_successful,
+        translation_successful=translation_successful,
+        contradictions_count=contradictions
+    )
+
+    # 7. Apply publishing gate (Problem 10)
+    # Require: truthfulness_score >= 0.80 and contradictions == 0. Otherwise, status = review_required
+    if truth_score >= 0.80 and contradictions == 0 and cred_score >= CONFIDENCE_AUTO_PUBLISH:
+        status = "published"
     else:
-        if score >= CONFIDENCE_AUTO_PUBLISH:
-            status = "published"
-        elif score >= CONFIDENCE_REVIEW_REQUIRED:
-            status = "review_required"
-        else:
-            status = "blocked"
+        status = "review_required"
 
     logger.info(
-        "Confidence [%s]: %.3f → %s (comp=%.2f gen=%.2f trans=%.2f)",
-        analytics.scope_key, score, status,
-        data_completeness_score, generation_success_score, translation_success_score,
+        "Credibility [%s]: %.3f → %s (truth_score=%.2f contradictions=%d)",
+        analytics.scope_key, cred_score, status, truth_score, contradictions
     )
-    return score, status
+    return cred_score, status
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +477,140 @@ def render_faq_jsonld(article: ArticleOutput) -> dict:
 # Final article assembly and output
 # ---------------------------------------------------------------------------
 
+def build_disclosures(
+    body: str,
+    language: str,
+    data_source_status: str,
+    report_type: str,
+    record_count: int,
+    market_name: str,
+    generation_provider: str
+) -> tuple[str, bool, bool]:
+    # Data source translations
+    ds_labels = {
+        "en": {
+            "LIVE": "Live OGD Data",
+            "LIVE_PLUS_CACHE": "Live OGD Data",
+            "CACHE": "Cached Data",
+            "MOCK": "Mock Demo Data",
+        },
+        "hi": {
+            "LIVE": "लाइव ओजीडी डेटा",
+            "LIVE_PLUS_CACHE": "लाइव ओजीडी डेटा",
+            "CACHE": "कैश किया गया डेटा",
+            "MOCK": "मॉक डेमो डेटा",
+        },
+        "mr": {
+            "LIVE": "लाईव्ह ओजीडी डेटा",
+            "LIVE_PLUS_CACHE": "लाईव्ह ओजीडी डेटा",
+            "CACHE": "कॅश केलेला डेटा",
+            "MOCK": "मॉक डेमो डेटा",
+        },
+        "gu": {
+            "LIVE": "લાઈવ ઓજીડી ડેટા",
+            "LIVE_PLUS_CACHE": "લાઈવ ઓજીડી ડેટા",
+            "CACHE": "કેશ કરેલો ડેટા",
+            "MOCK": "મૉક ડેમો ડેટા",
+        }
+    }
+
+    # Labels for fields
+    labels = {
+        "en": {
+            "ds_header": "Data Source:",
+            "src": "Source:",
+            "src_val": "Government of India OGD Market Dataset",
+            "mkt": "Market:",
+            "rec": "Records Analyzed:",
+            "ds": "Data Source:",
+            "rep_type": "Report Type:",
+            "ltd_notice": "Limited Data Notice:",
+            "ltd_text": "This report is based on a small number of market observations.",
+            "fallback": "Generated via Local Fallback Engine",
+        },
+        "hi": {
+            "ds_header": "डेटा स्रोत:",
+            "src": "स्रोत:",
+            "src_val": "भारत सरकार ओजीडी मार्केट डेटासेट",
+            "mkt": "मंडी:",
+            "rec": "विश्लेषण किए गए रिकॉर्ड:",
+            "ds": "डेटा स्रोत:",
+            "rep_type": "रिपोर्ट का प्रकार:",
+            "ltd_notice": "सीमित डेटा सूचना:",
+            "ltd_text": "यह रिपोर्ट कम संख्या में बाजार अवलोकनों पर आधारित है।",
+            "fallback": "स्थानीय फ़ॉलबैक इंजन के माध्यम से जनरेट किया गया",
+        },
+        "mr": {
+            "ds_header": "डेटा स्रोत:",
+            "src": "स्रोत:",
+            "src_val": "भारत सरकार ओजीडी मार्केट डेटासेट",
+            "mkt": "बाजार समिती:",
+            "rec": "विश्लेषण केलेले रेकॉर्ड:",
+            "ds": "डेटा स्रोत:",
+            "rep_type": "अहवाल प्रकार:",
+            "ltd_notice": "मर्यादित डेटा सूचना:",
+            "ltd_text": "हा अहवाल कमी संख्येने बाजार निरीक्षणावर आधारित आहे.",
+            "fallback": "स्थानिक फॉलबैक इंजिनद्वारे व्युत्पन्न केले",
+        },
+        "gu": {
+            "ds_header": "ડેટા સ્રોત:",
+            "src": "સ્રોત:",
+            "src_val": "ભારત સરકાર ઓજીડી માર્કેટ ડેટાસેટ",
+            "mkt": "મંડી:",
+            "rec": "વિશ્લેષણ કરેલ રેકોર્ડ્સ:",
+            "ds": "ડેટા સ્રોત:",
+            "rep_type": "અહેવાલ પ્રકાર:",
+            "ltd_notice": "મર્યાદિત ડેટા નોટિસ:",
+            "ltd_text": "આ અહેવાલ ઓછા બજાર નિરીક્ષણો પર આધારિત છે.",
+            "fallback": "સ્થાનિક ફોલબેક એન્જિન દ્વારા જનરેટ કરવામાં આવ્યું છે",
+        }
+    }
+
+    lang = language if language in labels else "en"
+    ds_lbl = ds_labels.get(lang, ds_labels["en"]).get(data_source_status, "Live OGD Data")
+    lbl = labels[lang]
+
+    # Clean body: if there is already a header or footer, strip it
+    body = re.sub(r'<div class="data-source-header".*?</div>', '', body, flags=re.DOTALL)
+    body = re.sub(r'<div class="limited-data-notice".*?</div>', '', body, flags=re.DOTALL)
+    body = re.sub(r'<div class="report-transparency-footer".*?</div>', '', body, flags=re.DOTALL)
+
+    # 1. Build Header
+    header_html = f"""<div class="data-source-header" style="padding: 10px; margin-bottom: 20px; border: 1px solid #ccc; background-color: #f9f9f9; border-radius: 4px;">
+  <strong>{lbl['ds_header']}</strong><br/>
+  {ds_lbl}
+</div>"""
+
+    # 2. Build Limited Data Notice
+    notice_html = ""
+    if report_type == "LIMITED_DATA_REPORT":
+        notice_html = f"""<div class="limited-data-notice" style="background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+  <strong>{lbl['ltd_notice']}</strong><br/>
+  {lbl['ltd_text']}
+</div>"""
+
+    # 3. Build Footer
+    fallback_line = f"<p><strong>{lbl['fallback']}</strong></p>" if generation_provider == "local_fallback" else ""
+    footer_html = f"""<div class="report-transparency-footer" style="margin-top: 20px; padding: 15px; border-top: 2px solid #eee; font-size: 0.9em; color: #555;">
+  {fallback_line}
+  <p><strong>{lbl['src']}</strong><br/>{lbl['src_val']}</p>
+  <p><strong>{lbl['mkt']}</strong><br/>{market_name}</p>
+  <p><strong>{lbl['rec']}</strong><br/>{record_count}</p>
+  <p><strong>{lbl['ds']}</strong><br/>{data_source_status}</p>
+  <p><strong>{lbl['rep_type']}</strong><br/>{report_type}</p>
+</div>"""
+
+    body_html = header_html + "\n" + notice_html + "\n" + body.strip() + "\n" + footer_html
+    
+    fallback_disclosure_present = True
+    if generation_provider == "local_fallback":
+        fallback_disclosure_present = (lbl['fallback'] in body_html)
+    
+    data_source_disclosure_present = (lbl['ds_header'] in body_html)
+
+    return body_html, fallback_disclosure_present, data_source_disclosure_present
+
+
 def assemble_final_article(
     article: ArticleOutput,
     analytics: AnalyticsPayload,
@@ -402,6 +633,42 @@ def assemble_final_article(
         title = article.title
         meta = article.meta_description
         body = article.body_html
+
+    # --- Clean disclosures and validate truthfulness on raw body ---
+    raw_body = re.sub(r'<div class="data-source-header".*?</div>', '', body, flags=re.DOTALL)
+    raw_body = re.sub(r'<div class="limited-data-notice".*?</div>', '', raw_body, flags=re.DOTALL)
+    raw_body = re.sub(r'<div class="report-transparency-footer".*?</div>', '', raw_body, flags=re.DOTALL)
+
+    contradictions, unsupported, scope_viols, truth_score = validate_article_truthfulness(
+        raw_body, analytics, scope
+    )
+
+    # Apply publishing gate (Problem 10)
+    final_status = publish_status
+    if truth_score < 0.80 or contradictions > 0:
+        final_status = "review_required"
+
+    # --- Build localized disclosures ---
+    data_source_status = analytics.data_source_status or "LIVE"
+    report_type = "FULL_REPORT" if analytics.record_count >= 10 else "LIMITED_DATA_REPORT"
+    record_count = analytics.record_count
+    
+    market_name = scope.market or analytics.market or scope.scope_label
+    market_name_t = market_name
+    if language == "hi":
+        if "nagpur" in market_name.lower(): market_name_t = "नागपुर"
+        elif "amravati" in market_name.lower(): market_name_t = "अमरावती"
+        elif "wardha" in market_name.lower(): market_name_t = "वर्धा"
+    elif language == "mr":
+        if "nagpur" in market_name.lower(): market_name_t = "नागपूर"
+        elif "amravati" in market_name.lower(): market_name_t = "अमरावती"
+        elif "wardha" in market_name.lower(): market_name_t = "वर्धा"
+
+    gen_provider = "local_fallback" if len(article.observed_facts) > 0 or (translated and translated.translation_provider == "local_fallback") else "gemini"
+
+    body_with_disc, fallback_disc, ds_disc = build_disclosures(
+        raw_body, language, data_source_status, report_type, record_count, market_name_t, gen_provider
+    )
 
     keywords = article.keywords
     if language != "en":
@@ -465,12 +732,11 @@ def assemble_final_article(
             seo_title = f"{commodity_name} Price Today in {region_name} Mandi"
     else:
         seo_title = title
-
-    # Rebuild article object for JSON-LD with correct title/meta
+ 
     rendering_article = ArticleOutput(
         title=title,
         meta_description=meta,
-        body_html=body,
+        body_html=body_with_disc,
         keywords=keywords,
         market_summary_table=article.market_summary_table,
         faqs=article.faqs,
@@ -484,13 +750,13 @@ def assemble_final_article(
         analytics.article_type,
         analytics.scope_label,
     )
-    faq_json_ld = render_faq_jsonld(article)  # FAQs in EN regardless of article language
+    faq_json_ld = render_faq_jsonld(article)
 
     return FinalArticleJSON(
         title=title,
         seo_title=seo_title,
         meta_description=meta,
-        body=body,
+        body=body_with_disc,
         keywords=keywords,
         language=language,
         date=analytics.date,
@@ -501,9 +767,18 @@ def assemble_final_article(
         faq_json_ld=faq_json_ld,
         faqs=[{"question": f.question, "answer": f.answer} for f in article.faqs],
         confidence_score=confidence_score,
-        publish_status=publish_status,
+        publish_status=final_status,
         pipeline_run_id=pipeline_run_id,
         generated_at=datetime.utcnow().isoformat() + "Z",
+        credibility_score=confidence_score,
+        data_source_status=data_source_status,
+        report_type=report_type,
+        contradictions_count=contradictions,
+        unsupported_claims_count=unsupported,
+        scope_violations_count=scope_viols,
+        truthfulness_score=truth_score,
+        fallback_disclosure_present=fallback_disc,
+        data_source_disclosure_present=ds_disc,
     )
 
 
