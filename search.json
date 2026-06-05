@@ -1,41 +1,11 @@
 [
   {
-    "title": "Soybean Prices in Maharashtra Stay Firm Today",
+    "title": "Soybean Mandi Bhav Today: Maharashtra Live Market Price & Analysis",
     "commodity": "soybean",
     "language": "en",
     "type": "state_market_report",
     "date": "2026-06-05",
     "url": "/soybean/maharashtra/",
-    "state": "Maharashtra",
-    "scope": "soybean_maharashtra"
-  },
-  {
-    "title": "મહારાષ્ટ્રમાં સોયાબીનના ભાવ આજે સ્થિર રહ્યા",
-    "commodity": "soybean",
-    "language": "gu",
-    "type": "state_market_report",
-    "date": "2026-06-05",
-    "url": "/gu/soybean/maharashtra/",
-    "state": "Maharashtra",
-    "scope": "soybean_maharashtra"
-  },
-  {
-    "title": "महाराष्ट्र में सोयाबीन के दाम आज स्थिर रहे",
-    "commodity": "soybean",
-    "language": "hi",
-    "type": "state_market_report",
-    "date": "2026-06-05",
-    "url": "/hi/soybean/maharashtra/",
-    "state": "Maharashtra",
-    "scope": "soybean_maharashtra"
-  },
-  {
-    "title": "महाराष्ट्रामध्ये सोयाबीनचे दर आज स्थिर राहिले",
-    "commodity": "soybean",
-    "language": "mr",
-    "type": "state_market_report",
-    "date": "2026-06-05",
-    "url": "/mr/soybean/maharashtra/",
     "state": "Maharashtra",
     "scope": "soybean_maharashtra"
   }
