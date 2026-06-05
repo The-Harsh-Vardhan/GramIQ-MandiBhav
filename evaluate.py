@@ -183,8 +183,8 @@ def generate_report(date: str, output_dir: Path = OUTPUT_DIR) -> EvaluationRepor
         report.errors.append(f"Output directory does not exist: {date_dir}")
         return report
 
-    # Scan all JSON files (published + review)
-    all_json_files = list(date_dir.rglob("*.json"))
+    # Scan all JSON files (published + review), excluding the quality report itself
+    all_json_files = [f for f in date_dir.rglob("*.json") if f.name != "quality_report.json"]
     report.total_files_scanned = len(all_json_files)
 
     if not all_json_files:

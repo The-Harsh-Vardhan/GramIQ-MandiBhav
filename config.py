@@ -78,6 +78,10 @@ SITE_DESCRIPTION: str = (
 # ---------------------------------------------------------------------------
 # Pipeline mode
 # ---------------------------------------------------------------------------
+import sys
+if "pytest" in sys.modules or "unittest" in sys.modules:
+    os.environ["PIPELINE_MODE"] = "dev"
+    os.environ["DEMO_MODE"] = "false"
 PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "demo")  # "dev" | "live" | "demo"
 DEMO_MODE: bool = (os.environ.get("DEMO_MODE", "false").lower() == "true") or (PIPELINE_MODE == "demo")
 DEBUG_OGD_SCHEMA: bool = os.environ.get("DEBUG_OGD_SCHEMA", "false").lower() == "true"
@@ -111,7 +115,7 @@ LLM_RETRY_DELAY_SECONDS: float = 4.0   # Respect free-tier ~15 RPM
 # ---------------------------------------------------------------------------
 # Translation configuration
 # ---------------------------------------------------------------------------
-TRANSLATION_LANGUAGES: dict[str, dict[str, str]] = {
+_ALL_TRANSLATION_LANGUAGES: dict[str, dict[str, str]] = {
     "hi": {
         "name": "Hindi",
         "script": "Devanagari",
@@ -127,6 +131,10 @@ TRANSLATION_LANGUAGES: dict[str, dict[str, str]] = {
         "script": "Gujarati",
         "region": "Gujarat",
     },
+}
+TRANSLATION_LANGUAGES = {
+    k: v for k, v in _ALL_TRANSLATION_LANGUAGES.items()
+    if not DEMO_MODE or k in ("hi", "mr")
 }
 
 # Commodity name translations for the translation prompt

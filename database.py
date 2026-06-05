@@ -137,6 +137,7 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
+    import config
     with get_connection() as conn:
         for r in records:
             comm = r.commodity.lower().strip()
@@ -146,10 +147,6 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
             exists = cursor.fetchone()
 
             if exists:
-                logger.info(
-                    "Skipped record due to duplicate key: market=%s, commodity=%s, date=%s, state=%s, variety=%s",
-                    r.market, comm, r.date, r.state, r.variety
-                )
                 skipped_dupes += 1
                 continue
 
@@ -187,9 +184,11 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
                 other_errors += 1
 
     logger.info(
-        "Inserted %d / %d market records (source=%s). Skipped duplicates: %d. Other errors: %d.",
-        inserted, len(records), source, skipped_dupes, other_errors
+        "Database:\nInserted: %d\nDuplicates: %d",
+        inserted, skipped_dupes
     )
+    config.db_inserted = inserted
+    config.db_duplicates = skipped_dupes
     return inserted
 
 

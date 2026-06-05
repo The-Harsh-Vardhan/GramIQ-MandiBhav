@@ -308,6 +308,14 @@ def build_template_faqs(
             )
         )
 
+    while len(faqs) < 3:
+        faqs.append(
+            FAQItem(
+                question=f"How can I track daily {commodity_name.lower()} price trends?",
+                answer=f"You can track daily {commodity_name.lower()} price trends, market arrivals, and processor demands on GramIQ."
+            )
+        )
+
     return faqs[:3]
 
 
@@ -441,6 +449,23 @@ def assemble_final_article(
             translated_kws.append(mapped_kw)
         keywords = translated_kws
 
+    seo_title = None
+    if getattr(config, "DEMO_MODE", False) and scope.scope_key == "soybean_nagpur":
+        commodity_name = analytics.commodity.title()
+        region_name = scope.market or scope.scope_label
+        if language == "hi":
+            comm_t = "सोयाबीन"
+            reg_t = "नागपुर" if "nagpur" in region_name.lower() else ("अमरावती" if "amravati" in region_name.lower() else ("वर्धा" if "wardha" in region_name.lower() else region_name))
+            seo_title = f"{reg_t} मंडी में आज {comm_t} का भाव"
+        elif language == "mr":
+            comm_t = "सोयाबीन"
+            reg_t = "नागपूर" if "nagpur" in region_name.lower() else ("अमरावती" if "amravati" in region_name.lower() else ("वर्धा" if "wardha" in region_name.lower() else region_name))
+            seo_title = f"{reg_t} बाजार समितीत आज {comm_t}चे दर"
+        else:
+            seo_title = f"{commodity_name} Price Today in {region_name} Mandi"
+    else:
+        seo_title = title
+
     # Rebuild article object for JSON-LD with correct title/meta
     rendering_article = ArticleOutput(
         title=title,
@@ -463,6 +488,7 @@ def assemble_final_article(
 
     return FinalArticleJSON(
         title=title,
+        seo_title=seo_title,
         meta_description=meta,
         body=body,
         keywords=keywords,
@@ -515,13 +541,14 @@ def write_article_file(
 
     # Write a copy to the global json cache folder for Task 8
     try:
-        cache_dir = output_dir / "json"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Determine cache name
-        cache_name = f"article_{scope}_{lang}.json"
-        if getattr(config, "DEMO_MODE", False) and scope == "soybean_maharashtra":
-            cache_name = f"article_soybean_maharashtra_latest_{lang}.json"
+        if getattr(config, "DEMO_MODE", False):
+            cache_dir = output_dir / "json" / "demo"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_name = f"soybean_nagpur_latest_{lang}.json"
+        else:
+            cache_dir = output_dir / "json" / "production"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_name = f"article_{scope}_{lang}.json"
             
         cache_path = cache_dir / cache_name
         with open(cache_path, "w", encoding="utf-8") as f:

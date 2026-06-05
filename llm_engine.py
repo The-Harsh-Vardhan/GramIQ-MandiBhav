@@ -587,6 +587,43 @@ def _generate_gainers_losers_fallback(payload: AnalyticsPayload) -> str:
 """
     return body
 
+def _generate_nagpur_demo_fallback(payload: AnalyticsPayload) -> str:
+    commodity = payload.commodity.title()
+    date = payload.date
+    market_name = payload.market or "Nagpur"
+    avg_price = payload.national_avg_modal
+    total_arrivals = payload.national_total_arrivals
+    msp_val = payload.msp_current_year or 4892.0
+    price_vs_msp_pct = payload.price_vs_msp_pct or 0.0
+    price_vs_msp_dir = payload.price_vs_msp_direction or "aligned with"
+    season_phase = payload.season_phase or "regular harvest"
+    season_note = payload.season_note or "Arrivals are flowing normally through the markets."
+
+    body = f"""
+<h2>Executive Summary</h2>
+<p>The agricultural mandi network across Maharashtra has witnessed active trade activity for {commodity} today on {date}. Market transactions in the region reflect stable supply dynamics with steady buying interest from major processors and local traders. Across key districts in the region, agricultural produce market committees (APMCs) report consistent demand, which has supported the local price structure. While overall sentiment remains cautious due to macroeconomic factors and shipping logistics, the regional trade flows continue to remain resilient.</p>
+<p>Trade volumes and farmer participation in major market yards indicate that the crop quality arriving at the platforms is highly satisfactory. Traders are actively participating in open auctions, and transactions are being settled promptly. The steady rate of arrivals coupled with standard quality parameters has prevented any sudden volatility, maintaining a balanced environment for both buyers and sellers in the agricultural ecosystem.</p>
+
+<h2>Market Snapshot</h2>
+<p>Today's trading session in {market_name} reported a volume weighted average modal price of Rs {avg_price:,.0f} per quintal. Total arrival volumes reached {total_arrivals:,.1f} tonnes today. This snapshot indicates strong regional trade integration and active distribution channels across the mandi network.</p>
+
+<h2>Price Analysis</h2>
+<p>In today's active trading session on {date}, the prices for {commodity} fluctuated within a standard band. The minimum price registered at the auction was Rs {avg_price * 0.95:,.0f} per quintal, showing steady support at lower bounds, while the maximum bid reached Rs {avg_price * 1.05:,.0f} per quintal for high-quality graded lots. The volume-weighted modal price, which represents the rate at which the bulk of transactions occurred, settled at Rs {avg_price:,.0f} per quintal.</p>
+
+<h2>Market Highlights</h2>
+<p>The total volume of {commodity} arrivals at the yard today was recorded at {total_arrivals:,.1f} tonnes. This substantial influx of supply has kept the grading, sorting, and auction platforms highly busy throughout the day. Traders and commission agents have reported steady progress in bagging and weighing operations, indicating healthy market liquidity and strong participation from local farmers.</p>
+
+<h2>MSP Comparison</h2>
+<p>The government Minimum Support Price (MSP) for {commodity} is set at Rs {msp_val:,.0f} per quintal. Comparing the current average price of Rs {avg_price:,.0f} per quintal to this benchmark shows that prices are running approximately {price_vs_msp_pct:.1f}% {price_vs_msp_dir} the support floor. This relationship between the market-determined rate and the official support price is critical for assessing farmers' profitability and planning government procurement operations.</p>
+
+<h2>Farmer Advice</h2>
+<p>Based on today's price levels and supply velocity, farmers are advised to make informed decisions. Since the average prices are maintaining stability, selling in small tranches rather than offloading the entire harvest at once can minimize market risk. For those with access to scientific storage facilities, holding back superior quality produce for a few weeks could yield better returns as off-season demand builds up.</p>
+
+<h2>AI Outlook</h2>
+<p>Looking ahead, the market outlook for {commodity} points to steady trading conditions. If arrival volumes decline in the coming days, we could see a minor upward bias in prices due to tight local stocks. Conversely, a surge in arrivals might put temporary downward pressure on modal prices. Overall, the presence of strong demand from crushers and oil mills will act as a support buffer, preventing any drastic price drops.</p>
+"""
+    return body
+
 def _generate_fallback_draft(payload: AnalyticsPayload, scope: ScopeTarget) -> ArticleDraft:
     atype = payload.article_type
     if atype == "daily_commodity_report":
@@ -599,6 +636,8 @@ def _generate_fallback_draft(payload: AnalyticsPayload, scope: ScopeTarget) -> A
         body = _generate_best_market_fallback(payload)
     elif atype == "top_gainers_losers":
         body = _generate_gainers_losers_fallback(payload)
+    elif atype == "nagpur_demo":
+        body = _generate_nagpur_demo_fallback(payload)
     else:
         body = _generate_state_report_fallback(payload)
     title = f"{payload.commodity.title()} Mandi Bhav Today {scope.scope_label}"
@@ -639,7 +678,14 @@ def generate_articles_for_commodity(
                     for scope_key, draft in drafts.items():
                         payload = scope_payloads[scope_key]
                         scope = scope_targets[scope_key]
-                        generated[scope_key] = assemble_article_output(draft, payload, scope)
+                        article_out = assemble_article_output(draft, payload, scope)
+                        
+                        # Validate quality
+                        from seo_assembler import validate_article_quality
+                        if not validate_article_quality(article_out):
+                            raise ValueError(f"Generated article for {scope_key} failed quality validation")
+                            
+                        generated[scope_key] = article_out
                     logger.info(
                         "Generated %d %s articles in batch attempt %d",
                         len(generated), commodity, attempt

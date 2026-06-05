@@ -135,8 +135,9 @@ def compute_analytics(
     if getattr(config, "DEMO_MODE", False):
         if commodity != "soybean":
             return {}
-        today_rows = [r for r in today_rows if r.get("state") == "Maharashtra"]
-        prev_rows = [r for r in prev_rows if r.get("state") == "Maharashtra"] if prev_rows else []
+        chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
+        today_rows = [r for r in today_rows if chosen_market.lower() in str(r.get("market_name") or r.get("market") or "").lower()]
+        prev_rows = [r for r in prev_rows if chosen_market.lower() in str(r.get("market_name") or r.get("market") or "").lower()] if prev_rows else []
 
     if not today_rows:
         logger.warning("No market data for %s on %s", commodity, date)
@@ -149,7 +150,8 @@ def compute_analytics(
     market_summaries = _build_market_summaries(today_df, prev_df)
 
     if getattr(config, "DEMO_MODE", False):
-        # Simplify to Maharashtra Soybean Metrics
+        chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
+        # Simplify to Selected Nagpur/Fallback Soybean Metrics
         avg_price = today_df["modal_price"].mean()
         total_arrivals = today_df["arrival_tonnes"].sum()
 
@@ -161,39 +163,32 @@ def compute_analytics(
                     (avg_price - prev_avg) / prev_avg * 100.0, 2
                 )
 
-        top_row = today_df.loc[today_df["modal_price"].idxmax()]
-        ss = StateSummary(
-            state="Maharashtra",
-            avg_modal_price=round(avg_price, 2),
-            total_arrivals=round(total_arrivals, 2),
-            market_count=len(today_df),
-            top_market=str(top_row["market_name"]),
-            top_market_price=float(top_row["modal_price"]),
-        )
-
         payload = AnalyticsPayload(
             commodity=commodity,
             date=date,
-            article_type="state_market_report",
-            scope_key="soybean_maharashtra",
-            scope_label="Maharashtra",
+            article_type="nagpur_demo",
+            scope_key="soybean_nagpur",
+            scope_label=chosen_market,
             state="Maharashtra",
+            market=chosen_market,
             national_avg_modal=round(avg_price, 2),
             national_day_change_pct=national_day_change_pct,
             national_total_arrivals=round(total_arrivals, 2),
-            state_summaries=[ss],
+            state_summaries=[],
             markets=market_summaries,
-            top_markets_by_price=sorted(market_summaries, key=lambda m: m.modal_price, reverse=True)[:3],
-            bottom_markets_by_price=sorted(market_summaries, key=lambda m: m.modal_price)[:3],
+            top_markets_by_price=market_summaries,
+            bottom_markets_by_price=market_summaries,
             market_count=len(market_summaries),
         )
         payload = _inject_knowledge(payload, knowledge, date)
-        results = {"soybean_maharashtra": payload}
+        results = {"soybean_nagpur": payload}
 
         logger.info(
-            "Demo Mode: Maharashtra Soybean Analytics computed on %s: 1 scope generated",
-            date
+            "Demo Mode: %s Soybean Analytics computed on %s: 1 scope generated (soybean_nagpur)",
+            chosen_market, date
         )
+        # Store average price in config for logging at the end
+        config.demo_avg_price = round(avg_price, 2)
         return results
 
     # National-level stats
@@ -397,7 +392,7 @@ def build_scope_matrix(date: str, knowledge: dict) -> tuple[dict[str, AnalyticsP
 
     if getattr(config, "DEMO_MODE", False):
         allowed_demo_scopes = {
-            "soybean_maharashtra",
+            "soybean_nagpur",
         }
         scope_targets = [s for s in scope_targets if s.scope_key in allowed_demo_scopes]
 

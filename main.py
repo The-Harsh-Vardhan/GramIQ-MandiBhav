@@ -34,10 +34,12 @@ def _find_cached_output(date: str, scope_key: str, language: str) -> Path | None
         config.OUTPUT_DIR / date / scope_key / f"{language}.json",
         config.OUTPUT_DIR / date / "review" / f"{scope_key}_{language}.json",
         config.OUTPUT_DIR / date / "blocked" / f"{scope_key}_{language}.json",
-        config.OUTPUT_DIR / "json" / f"article_{scope_key}_{language}.json",
     ]
-    if getattr(config, "DEMO_MODE", False) and scope_key == "soybean_maharashtra":
-        candidates.append(config.OUTPUT_DIR / "json" / f"article_soybean_maharashtra_latest_{language}.json")
+    if getattr(config, "DEMO_MODE", False):
+        if scope_key == "soybean_nagpur":
+            candidates.append(config.OUTPUT_DIR / "json" / "demo" / f"soybean_nagpur_latest_{language}.json")
+    else:
+        candidates.append(config.OUTPUT_DIR / "json" / "production" / f"article_{scope_key}_{language}.json")
     for path in candidates:
         if path.exists():
             return path
@@ -243,8 +245,12 @@ def stage_generate_and_assemble(
                     cached_en, payload, scope
                 )
                 logger.info("Cache hit: English article %s", scope.scope_key)
+                if scope.scope_key == "soybean_nagpur":
+                    config.demo_gen_status = "Cache Hit"
             else:
                 missing_generation[scope.scope_key] = payload
+                if scope.scope_key == "soybean_nagpur":
+                    config.demo_gen_status = "Article Generated"
 
         if missing_generation:
             generated = generate_articles_for_commodity(
@@ -276,6 +282,11 @@ def stage_generate_and_assemble(
                                 translation_provider=tr_data.get("translation_provider", "gemini"),
                             )
                             cached_translations.setdefault(scope_key, {})[lang_code] = translated
+                            if scope_key == "soybean_nagpur":
+                                if lang_code == "hi":
+                                    config.demo_trans_hi_ok = True
+                                elif lang_code == "mr":
+                                    config.demo_trans_mr_ok = True
                         except Exception as e:
                             logger.warning("Failed to load cached translation: %s", e)
                             missing_langs.append(lang_code)
@@ -345,6 +356,11 @@ def stage_generate_and_assemble(
                         article, payload, scope, lang_code, confidence, status, run_id, translated
                     )
                     write_article_file(tr_article)
+                    if scope.scope_key == "soybean_nagpur":
+                        if lang_code == "hi":
+                            config.demo_trans_hi_ok = True
+                        elif lang_code == "mr":
+                            config.demo_trans_mr_ok = True
                 except Exception as e:
                     logger.warning("Write failed for %s/%s: %s", scope.scope_key, lang_code, e)
 
@@ -373,16 +389,19 @@ def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool)
 
     if skip_publish:
         logger.info("Publishing explicitly skipped via CLI flag.")
+        config.demo_publish_ok = False
         return
 
     # Skip in GITHUB_ACTIONS since deployment is run by GITHUB_ACTIONS deploy job.
     if os.environ.get("GITHUB_ACTIONS") == "true":
         logger.info("Running in GitHub Actions environment. Skipping automatic local Git push to gh-pages.")
+        config.demo_publish_ok = True
         return
 
-    should_publish = force_publish or (mode == "live")
+    should_publish = force_publish or (mode in ("live", "demo"))
     if not should_publish:
-        logger.info("Publishing skipped (not in 'live' mode, and --publish was not specified).")
+        logger.info("Publishing skipped (not in 'live' or 'demo' mode, and --publish was not specified).")
+        config.demo_publish_ok = False
         return
 
     logger.info("--- Stage 5: Static Site Generation & Publishing ---")
@@ -465,13 +484,16 @@ def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool)
             status_res = run_git(["git", "status", "--porcelain"], cwd=tmpdir)
             if not status_res.stdout.strip():
                 logger.info("No changes to deploy. GitHub Pages is already up to date.")
+                config.demo_publish_ok = True
                 return
 
             run_git(["git", "commit", "-m", commit_msg], cwd=tmpdir)
             run_git(["git", "push", "origin", "gh-pages", "--force"], cwd=tmpdir)
             logger.info("Successfully published generated articles to GitHub Pages (gh-pages branch)!")
+            config.demo_publish_ok = True
         except Exception as e:
             logger.error("Failed to push static site to gh-pages branch: %s", e)
+            config.demo_publish_ok = False
 
 
 # ---------------------------------------------------------------------------
@@ -536,11 +558,6 @@ def main() -> None:
 
     # Auto-skip translation in demo mode unless explicitly forced
     skip_translate = args.skip_translate
-    if mode == "demo":
-        import os
-        if os.environ.get("DEMO_TRANSLATE", "false").lower() != "true":
-            logger.info("Demo Mode: Skipping translations by default (set DEMO_TRANSLATE=true to enable)")
-            skip_translate = True
 
     published, review, blocked = stage_generate_and_assemble(
         args.date, run_id, analytics_map, scope_targets, knowledge, skip_translate
@@ -571,6 +588,49 @@ def main() -> None:
     mins = int(pipeline_duration // 60)
     secs = int(pipeline_duration % 60)
     logger.info("Pipeline complete in %dm %ds", mins, secs)
+
+    if mode == "demo":
+        chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
+        ogd_records_count = getattr(config, "demo_records_count", 0)
+        db_inserted = getattr(config, "db_inserted", 0)
+        db_duplicates = getattr(config, "db_duplicates", 0)
+        avg_price = getattr(config, "demo_avg_price", 0.0)
+        gen_status = getattr(config, "demo_gen_status", "Article Generated")
+        trans_hi = "✓" if getattr(config, "demo_trans_hi_ok", False) else "✗"
+        trans_mr = "✓" if getattr(config, "demo_trans_mr_ok", False) else "✗"
+        if args.skip_publish:
+            pub_status = "SKIPPED"
+        else:
+            pub_status = "✓" if getattr(config, "demo_publish_ok", False) else "✗"
+
+        summary = f"""
+OGD Fetch:
+Commodity: Soybean
+Market: {chosen_market}
+Records: {ogd_records_count}
+
+Database:
+Inserted: {db_inserted}
+Duplicates: {db_duplicates}
+
+Analytics:
+Average Price: ₹{avg_price}
+
+Generation:
+{gen_status}
+
+Translation:
+Hindi {trans_hi}
+Marathi {trans_mr}
+
+Publishing:
+GitHub Pages {pub_status}
+"""
+        try:
+            print(summary)
+        except UnicodeEncodeError:
+            safe_summary = summary.replace("₹", "Rs. ").replace("✓", "OK").replace("✗", "FAIL")
+            print(safe_summary)
 
 
 if __name__ == "__main__":

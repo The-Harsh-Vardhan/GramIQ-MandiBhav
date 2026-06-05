@@ -196,6 +196,7 @@ class FinalArticleJSON(BaseModel):
     Written as a JSON file per article per language.
     """
     title: str
+    seo_title: Optional[str] = None
     meta_description: str
     body: str                   # Full HTML article body
     keywords: list[str]

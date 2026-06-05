@@ -9,6 +9,7 @@ Usage:
 
 import csv
 import logging
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -95,7 +96,16 @@ class MockProvider(DataProvider):
 
     def fetch_market_data(self, date: str, commodity: str) -> list[MarketRecord]:
         csv_path = self.mock_dir / f"{commodity}_sample.csv"
-        return self._load_csv(csv_path, override_date=date)
+        records = self._load_csv(csv_path, override_date=date)
+        if getattr(config, "DEMO_MODE", False):
+            nagpur_records = [r for r in records if "nagpur" in r.market.lower()]
+            if nagpur_records:
+                config.demo_chosen_market = "Nagpur"
+                return nagpur_records
+            elif records:
+                config.demo_chosen_market = records[0].market
+                return [records[0]]
+        return records
 
     def fetch_previous_day_data(self, date: str, commodity: str) -> list[MarketRecord]:
         # Compute the previous date from the requested date
@@ -195,6 +205,8 @@ class LiveProvider(DataProvider):
         commodity_filter: Optional[str],
         offset: int,
         limit: int,
+        state_filter: Optional[str] = None,
+        market_filter: Optional[str] = None,
     ) -> list[dict]:
         """Make one paginated OGD API request and return raw records."""
         import time
@@ -216,6 +228,12 @@ class LiveProvider(DataProvider):
 
         if commodity_filter:
             params["filters[commodity]"] = commodity_filter
+
+        if state_filter:
+            params["filters[state]"] = state_filter
+
+        if market_filter:
+            params["filters[market]"] = market_filter
 
         url = f"{self.endpoint}/{self.resource_id}"
         
@@ -331,7 +349,14 @@ class LiveProvider(DataProvider):
 
         return []
 
-    def _fetch_all_pages(self, date: Optional[str], commodity_filter: Optional[str], limit: Optional[int] = None) -> list[dict]:
+    def _fetch_all_pages(
+        self,
+        date: Optional[str],
+        commodity_filter: Optional[str],
+        limit: Optional[int] = None,
+        state_filter: Optional[str] = None,
+        market_filter: Optional[str] = None,
+    ) -> list[dict]:
         """Fetch all pages for one commodity filter value."""
         all_records: list[dict] = []
         offset = 0
@@ -345,18 +370,26 @@ class LiveProvider(DataProvider):
         else:
             page_limit = OGD_PAGE_LIMIT
 
+        page_num = 0
         while True:
+            page_num += 1
             page = self._call_ogd_api_page(
                 date=date,
                 commodity_filter=commodity_filter,
                 offset=offset,
                 limit=page_limit,
+                state_filter=state_filter,
+                market_filter=market_filter,
             )
             if not page:
                 break
             all_records.extend(page)
             if len(page) < page_limit:
                 break
+            if getattr(config, "PIPELINE_MODE", "demo") == "demo":
+                if len(all_records) > 20 or page_num >= 3:
+                    logger.info("Demo Mode: reached pagination limits (records: %d, pages: %d)", len(all_records), page_num)
+                    break
             offset += page_limit
 
         return all_records
@@ -393,12 +426,24 @@ class LiveProvider(DataProvider):
                 raw_date = row.get("arrival_date", row.get("Arrival_Date", ""))
                 record_date = date
                 if raw_date:
-                    try:
-                        from datetime import datetime
-                        parsed_dt = datetime.strptime(str(raw_date).strip(), "%d/%m/%Y")
-                        record_date = parsed_dt.strftime("%Y-%m-%d")
-                    except Exception:
-                        pass
+                    raw_date_str = str(raw_date).strip()
+                    parsed_date = None
+                    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+                        try:
+                            from datetime import datetime
+                            parsed_dt = datetime.strptime(raw_date_str, fmt)
+                            parsed_date = parsed_dt.strftime("%Y-%m-%d")
+                            break
+                        except Exception:
+                            continue
+                    if parsed_date:
+                        record_date = parsed_date
+                        logger.debug(
+                            "Raw OGD Date: %s | Parsed Date: %s | Stored Date: %s",
+                            raw_date_str, parsed_date, record_date
+                        )
+                    else:
+                        logger.warning("Could not parse OGD Date: %s, falling back to %s", raw_date_str, date)
 
                 record = MarketRecord(
                     state=get_field(row, "state"),
@@ -425,61 +470,136 @@ class LiveProvider(DataProvider):
         filter_values = OGD_COMMODITY_FILTERS.get(commodity_key, [commodity.title()])
         all_raw: list[dict] = []
 
-        # --- Step 1: Date + Commodity ---
-        logger.info("Attempting Query 1: date + commodity filter for %s on %s", commodity, date)
-        for commodity_filter in filter_values:
-            if limit is not None:
-                raw = self._fetch_all_pages(date, commodity_filter, limit)
+        if getattr(config, "PIPELINE_MODE", "demo") == "demo":
+            # Nagpur Demo Mode Ingestion
+            logger.info("Demo Mode: Fetching Soybean live data for Maharashtra...")
+            state_filter = "Maharashtra"
+            # Try Nagpur APMC direct filter first
+            for commodity_filter in filter_values:
+                raw = self._fetch_all_pages(
+                    date=date,
+                    commodity_filter=commodity_filter,
+                    limit=limit,
+                    state_filter=state_filter,
+                    market_filter="Nagpur APMC"
+                )
+                if raw:
+                    logger.info("Demo Mode: Direct market filter found %d records for Nagpur APMC", len(raw))
+                    all_raw = raw
+                    break
+            
+            # If Nagpur direct filter yielded nothing, fetch all Maharashtra soybean records and filter locally
+            if not all_raw:
+                logger.info("Demo Mode: Direct Nagpur query returned 0 records. Fetching all Maharashtra Soybean records for local filtering.")
+                maharashtra_raw = []
+                for commodity_filter in filter_values:
+                    raw = self._fetch_all_pages(
+                        date=date,
+                        commodity_filter=commodity_filter,
+                        limit=limit,
+                        state_filter=state_filter
+                    )
+                    if raw:
+                        maharashtra_raw = raw
+                        break
+                
+                if maharashtra_raw:
+                    # Implement fallback priority logic: Nagpur -> Amravati -> Wardha -> Any Maharashtra market
+                    fallbacks = ["nagpur", "amravati", "wardha"]
+                    chosen_market = None
+                    for market_keyword in fallbacks:
+                        matched = [
+                            r for r in maharashtra_raw
+                            if market_keyword in str(r.get("Market_Name") or r.get("market") or "").lower()
+                        ]
+                        if matched:
+                            all_raw = matched
+                            chosen_market = matched[0].get("Market_Name") or matched[0].get("market") or market_keyword.title()
+                            logger.info("Demo Mode: Found local match for keyword '%s' -> Chosen market: %s (%d records)", market_keyword, chosen_market, len(matched))
+                            break
+                    
+                    if not all_raw:
+                        # Fallback to any Maharashtra market
+                        markets_found = set(str(r.get("Market_Name") or r.get("market") or "") for r in maharashtra_raw if (r.get("Market_Name") or r.get("market")))
+                        if markets_found:
+                            chosen_market = sorted(list(markets_found))[0]
+                            all_raw = [
+                                r for r in maharashtra_raw
+                                if str(r.get("Market_Name") or r.get("market") or "").lower() == chosen_market.lower()
+                            ]
+                            logger.info("Demo Mode: Fallback to first available Maharashtra market: %s (%d records)", chosen_market, len(all_raw))
+            
+            # Store chosen market name in config for Problem 10 logging
+            if all_raw:
+                chosen = all_raw[0].get("Market_Name") or all_raw[0].get("market") or "Nagpur APMC"
+                # Strip APMC suffix for display
+                chosen_clean = re.sub(r"\s+apmc\b", "", chosen, flags=re.IGNORECASE).strip()
+                config.demo_chosen_market = chosen_clean
             else:
-                raw = self._fetch_all_pages(date, commodity_filter)
-            if raw:
-                logger.info("Query 1 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
-                all_raw = raw
-                break
+                config.demo_chosen_market = "Nagpur"
 
-        # --- Step 2: Commodity Only ---
-        if not all_raw:
-            logger.info("Query 1 returned 0 records. Attempting Query 2: commodity filter only for %s", commodity)
+            if not all_raw:
+                logger.warning("Demo Mode: No live OGD data found for Nagpur/fallback markets. Falling back to MockProvider.")
+                mock_provider = MockProvider()
+                mock_records = mock_provider.fetch_market_data(date, commodity)
+                config.demo_chosen_market = "Nagpur"
+                return mock_records
+        else:
+            # --- Step 1: Date + Commodity ---
+            logger.info("Attempting Query 1: date + commodity filter for %s on %s", commodity, date)
             for commodity_filter in filter_values:
                 if limit is not None:
-                    raw = self._fetch_all_pages(None, commodity_filter, limit)
+                    raw = self._fetch_all_pages(date, commodity_filter, limit)
                 else:
-                    raw = self._fetch_all_pages(None, commodity_filter)
+                    raw = self._fetch_all_pages(date, commodity_filter)
                 if raw:
-                    logger.info("Query 2 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
+                    logger.info("Query 1 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
                     all_raw = raw
                     break
 
-        # --- Step 3: Latest Records (no filters) ---
-        if not all_raw:
-            logger.info("Query 2 returned 0 records. Attempting Query 3: latest records (no filters)")
-            if limit is not None:
-                raw = self._fetch_all_pages(None, None, limit)
-            else:
-                raw = self._fetch_all_pages(None, None, 100)
-            if raw:
-                logger.info("Query 3 SUCCESS: Found %d latest raw records from OGD API", len(raw))
-                # Filter locally for commodity
-                filtered_raw = []
-                for row in raw:
-                    row_commodity = str(row.get("commodity", "")).strip().lower()
-                    for field_name in ["commodity", "Commodity"]:
-                        if field_name in row:
-                            row_commodity = str(row[field_name]).strip().lower()
-                            break
-                    if any(fv.lower() == row_commodity for fv in filter_values):
-                        filtered_raw.append(row)
-                if filtered_raw:
-                    logger.info("Filtered Query 3: Found %d records matching commodity %s", len(filtered_raw), commodity)
-                    all_raw = filtered_raw
-                else:
-                    logger.warning("Query 3 returned records, but none matched commodity %s", commodity)
+            # --- Step 2: Commodity Only ---
+            if not all_raw:
+                logger.info("Query 1 returned 0 records. Attempting Query 2: commodity filter only for %s", commodity)
+                for commodity_filter in filter_values:
+                    if limit is not None:
+                        raw = self._fetch_all_pages(None, commodity_filter, limit)
+                    else:
+                        raw = self._fetch_all_pages(None, commodity_filter)
+                    if raw:
+                        logger.info("Query 2 SUCCESS: Found %d records for commodity filter '%s'", len(raw), commodity_filter)
+                        all_raw = raw
+                        break
 
-        # --- Step 4: Fallback to Mock ---
-        if not all_raw:
-            logger.warning("All OGD API queries returned 0 records for %s on %s. Falling back to MockProvider.", commodity, date)
-            mock_provider = MockProvider()
-            return mock_provider.fetch_market_data(date, commodity)
+            # --- Step 3: Latest Records (no filters) ---
+            if not all_raw:
+                logger.info("Query 2 returned 0 records. Attempting Query 3: latest records (no filters)")
+                if limit is not None:
+                    raw = self._fetch_all_pages(None, None, limit)
+                else:
+                    raw = self._fetch_all_pages(None, None, 100)
+                if raw:
+                    logger.info("Query 3 SUCCESS: Found %d latest raw records from OGD API", len(raw))
+                    # Filter locally for commodity
+                    filtered_raw = []
+                    for row in raw:
+                        row_commodity = str(row.get("commodity", "")).strip().lower()
+                        for field_name in ["commodity", "Commodity"]:
+                            if field_name in row:
+                                row_commodity = str(row[field_name]).strip().lower()
+                                break
+                        if any(fv.lower() == row_commodity for fv in filter_values):
+                            filtered_raw.append(row)
+                    if filtered_raw:
+                        logger.info("Filtered Query 3: Found %d records matching commodity %s", len(filtered_raw), commodity)
+                        all_raw = filtered_raw
+                    else:
+                        logger.warning("Query 3 returned records, but none matched commodity %s", commodity)
+
+            # --- Step 4: Fallback to Mock ---
+            if not all_raw:
+                logger.warning("All OGD API queries returned 0 records for %s on %s. Falling back to MockProvider.", commodity, date)
+                mock_provider = MockProvider()
+                return mock_provider.fetch_market_data(date, commodity)
 
         return self._parse_ogd_records(all_raw, date, commodity)
 
@@ -499,7 +619,7 @@ def get_provider() -> DataProvider:
     If PIPELINE_MODE=live but OGD_API_KEY is missing/invalid,
     logs a clear warning and falls back to MockProvider automatically.
     """
-    if PIPELINE_MODE == "live":
+    if PIPELINE_MODE in ("live", "demo"):
         try:
             provider = LiveProvider()
             logger.info("Using LiveProvider (OGD API)")
@@ -623,7 +743,12 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
 
     if not records:
         logger.warning("No records fetched for %s on %s", commodity, date)
+        if getattr(config, "DEMO_MODE", False):
+            config.demo_records_count = 0
         return []
+
+    if getattr(config, "DEMO_MODE", False):
+        config.demo_records_count = len(records)
 
     source = "mock" if isinstance(actual_provider, MockProvider) else "ogd_api"
     inserted = insert_market_records(records, source=source)

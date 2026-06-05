@@ -53,13 +53,17 @@ def clear_date_data(target_date: str, db_path: Path, output_dir: Path) -> None:
 
     # 3. Clear cached demo json files if target_date is today or latest
     # (these cache hits can prevent regenerating articles in demo mode)
-    latest_cache_files = list(output_dir.glob("json/article_*.json"))
+    latest_cache_files = (
+        list(output_dir.glob("json/article_*.json")) +
+        list(output_dir.glob("json/demo/*.json")) +
+        list(output_dir.glob("json/production/*.json"))
+    )
     if latest_cache_files:
-        print("Found cached articles in output/json/ (demo mode cache).")
+        print("Found cached articles in output/json/.")
         for f in latest_cache_files:
             try:
                 f.unlink()
-                print(f"  - Removed cache file: {f.name}")
+                print(f"  - Removed cache file: {f.relative_to(output_dir)}")
             except Exception as e:
                 print(f"  - Error removing cache file {f.name}: {e}")
 
