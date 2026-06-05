@@ -15,6 +15,7 @@ from datetime import date as date_type
 
 from config import DB_PATH
 from schemas import MarketRecord
+from date_utils import normalize_date
 
 logger = logging.getLogger("mandibhav.database")
 
@@ -141,9 +142,10 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
     with get_connection() as conn:
         for r in records:
             comm = r.commodity.lower().strip()
+            norm_date = normalize_date(r.date)
 
             # Check for duplicate in database
-            cursor = conn.execute(sql_check, (comm, r.date, r.state, r.market, r.variety))
+            cursor = conn.execute(sql_check, (comm, norm_date, r.state, r.market, r.variety))
             exists = cursor.fetchone()
 
             if exists:
@@ -156,7 +158,7 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
                     sql_insert,
                     (
                         comm,
-                        r.date,
+                        norm_date,
                         r.state,
                         r.district,
                         r.market,
@@ -194,6 +196,7 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
 
 def query_market_data(commodity: str, market_date: str) -> list[dict]:
     """Fetch all market records for a given commodity and date."""
+    market_date = normalize_date(market_date)
     sql = """
         SELECT * FROM market_data
         WHERE commodity_slug = ? AND market_date = ?
@@ -209,6 +212,8 @@ def query_previous_day_data(commodity: str, market_date: str) -> list[dict]:
     Fetch market records for the day before market_date.
     Uses SQLite date arithmetic to find the previous date.
     """
+    market_date = normalize_date(market_date)
+    logger.info("Fetching previous-day data for comparison analytics")
     sql = """
         SELECT * FROM market_data
         WHERE commodity_slug = ?
@@ -242,6 +247,8 @@ def insert_article(article_data: dict) -> bool:
     Insert a single article. Returns True if inserted, False if duplicate.
     article_data should match the articles table columns.
     """
+    if "article_date" in article_data:
+        article_data["article_date"] = normalize_date(article_data["article_date"])
     sql = """
         INSERT OR IGNORE INTO articles
             (id, commodity_slug, article_date, article_type, scope_key,
@@ -261,6 +268,7 @@ def insert_article(article_data: dict) -> bool:
 
 def query_articles_by_date(article_date: str, language: str = "en") -> list[dict]:
     """Fetch all articles for a given date and language."""
+    article_date = normalize_date(article_date)
     sql = """
         SELECT * FROM articles
         WHERE article_date = ? AND language = ?
@@ -277,6 +285,7 @@ def query_articles_by_date(article_date: str, language: str = "en") -> list[dict
 
 def log_pipeline_run(run_id: str, run_date: str, mode: str) -> None:
     """Create a pipeline run record at the start of execution."""
+    run_date = normalize_date(run_date)
     sql = """
         INSERT OR IGNORE INTO pipeline_runs (run_id, run_date, mode)
         VALUES (?, ?, ?)

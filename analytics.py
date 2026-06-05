@@ -132,6 +132,23 @@ def compute_analytics(
     today_rows = query_market_data(commodity, date)
     prev_rows = query_previous_day_data(commodity, date)
 
+    # Calculate diagnostics before any filtering or analytics
+    raw_df = pd.DataFrame(today_rows) if today_rows else pd.DataFrame()
+    if not raw_df.empty:
+        m_col = "market_name" if "market_name" in raw_df.columns else "market"
+        v_col = "variety" if "variety" in raw_df.columns else "variety"
+        g_col = "grade" if "grade" in raw_df.columns else "grade"
+        
+        unique_markets = int(raw_df[m_col].nunique()) if m_col in raw_df.columns else 0
+        unique_varieties = int(raw_df[v_col].nunique()) if v_col in raw_df.columns else 0
+        unique_grades = int(raw_df[g_col].nunique()) if g_col in raw_df.columns else 0
+    else:
+        unique_markets = 0
+        unique_varieties = 0
+        unique_grades = 0
+        
+    logger.info("[OGD DIAGNOSTICS] Commodity: %s | Unique Markets: %d | Unique Varieties: %d | Unique Grades: %d", commodity, unique_markets, unique_varieties, unique_grades)
+
     if getattr(config, "DEMO_MODE", False):
         if commodity != "soybean":
             return {}
@@ -166,7 +183,7 @@ def compute_analytics(
         payload = AnalyticsPayload(
             commodity=commodity,
             date=date,
-            article_type="nagpur_demo",
+            article_type="price_snapshot_report",
             scope_key="soybean_nagpur",
             scope_label=chosen_market,
             state="Maharashtra",
@@ -179,6 +196,9 @@ def compute_analytics(
             top_markets_by_price=market_summaries,
             bottom_markets_by_price=market_summaries,
             market_count=len(market_summaries),
+            unique_markets_count=unique_markets,
+            unique_varieties_count=unique_varieties,
+            unique_grades_count=unique_grades,
         )
         payload = _inject_knowledge(payload, knowledge, date)
         payload.record_count = getattr(config, "demo_records_count", 0)
@@ -362,6 +382,9 @@ def compute_analytics(
     for payload in results.values():
         payload.record_count = getattr(config, "demo_records_count", 0)
         payload.data_source_status = getattr(config, "ingestion_data_source", "LIVE")
+        payload.unique_markets_count = unique_markets
+        payload.unique_varieties_count = unique_varieties
+        payload.unique_grades_count = unique_grades
 
     logger.info(
         "Analytics computed for %s on %s: %d scopes generated",

@@ -92,6 +92,21 @@
     </div>
   </section>
   {% endfor %}
+
+  {# Historical Reports Archive #}
+  {% if archive_list %}
+  <section style="margin-top: var(--space-3xl); border-top: 1px solid var(--border); padding-top: var(--space-2xl);">
+    <h2 class="group-heading">Historical Reports Archive</h2>
+    <p style="margin-bottom: var(--space-md); color: var(--text-muted);">Browse historical mandi price bulletins for {{ commodity.name }}:</p>
+    <div style="display: flex; gap: var(--space-xs); flex-wrap: wrap;">
+      {% for item in archive_list %}
+      <a href="{{ base_url }}{{ item.url }}" class="lang-pill" id="archive-date-{{ item.date }}">
+        {{ item.date | format_date }}
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 
 {% endblock %}

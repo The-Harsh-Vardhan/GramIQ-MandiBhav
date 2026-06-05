@@ -99,6 +99,11 @@ OGD_RESOURCE_ID: str = os.environ.get(
 )
 OGD_API_FORMAT: str = "json"
 OGD_PAGE_LIMIT: int = int(os.environ.get("OGD_PAGE_LIMIT", "1000"))
+OGD_CONNECT_TIMEOUT: int = int(os.environ.get("OGD_CONNECT_TIMEOUT", "10"))
+OGD_READ_TIMEOUT: int = int(os.environ.get("OGD_READ_TIMEOUT", "45"))
+logger.info("OGD Connect Timeout: %d seconds", OGD_CONNECT_TIMEOUT)
+logger.info("OGD Read Timeout: %d seconds", OGD_READ_TIMEOUT)
+
 OGD_COMMODITY_FILTERS: dict[str, list[str]] = {
     "soybean": ["Soyabean", "Soybean"],
     "cotton": ["Cotton"],
@@ -134,8 +139,11 @@ _ALL_TRANSLATION_LANGUAGES: dict[str, dict[str, str]] = {
 }
 TRANSLATION_LANGUAGES = {
     k: v for k, v in _ALL_TRANSLATION_LANGUAGES.items()
-    if not DEMO_MODE or k in ("hi", "mr")
+    if not DEMO_MODE  # Empty in demo/MVP mode, or we can make it empty globally
 }
+# Since MVP/demo mode requires English only:
+if DEMO_MODE:
+    TRANSLATION_LANGUAGES = {}
 
 # Commodity name translations for the translation prompt
 COMMODITY_TRANSLATIONS: dict[str, dict[str, str]] = {

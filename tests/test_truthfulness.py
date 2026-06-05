@@ -250,9 +250,6 @@ def test_disclosure_injection_hindi():
     assert ds_disc is True
 
 # ---------------------------------------------------------------------------
-# Confidence Gate & Auto-Publish Tests
-# ---------------------------------------------------------------------------
-
 def test_confidence_gate_auto_publish_success(base_analytics):
     """Perfect live article meets confidence threshold and has no contradictions -> published."""
     # Ensure configuration thresholds are standard
@@ -263,11 +260,12 @@ def test_confidence_gate_auto_publish_success(base_analytics):
         meta_description="Latest Soybean Mandi Bhav in Maharashtra. Average price is Rs 6,625 with arrivals of 100 tonnes.",
         body_html=(
             "<p>Consistent prices observed today. Modal rate is Rs 6,625.</p>"
-            "<p>This is a long body paragraph to satisfy the pydantic validation rules. We want to ensure that the content is descriptive enough and meets the length requirements set by the schema. Prices remained stable, which is a good indicator for farmers and traders. Local produce market committees reported steady transaction volumes today.</p>"
-            "<p>To ensure we have enough words, let's write more paragraphs. The agricultural mandi network has witnessed stable activity for Soybean today. Market transactions reflect stable supply dynamics with steady buying interest from major buyers and local traders. In Nagpur, agricultural produce market committees report consistent demand, which has supported the local price structure. While overall sentiment remains cautious due to local factors, the trade flows continue to remain resilient.</p>"
-            "<p>Trade volumes and farmer participation in major market yards indicate that the crop quality arriving at the platforms is highly satisfactory. Traders are actively participating in open auctions, and transactions are being settled promptly. The steady rate of arrivals coupled with standard quality parameters has prevented any sudden volatility, maintaining a balanced environment for both buyers and sellers in the agricultural ecosystem.</p>"
-            "<p>Looking ahead, the market points to steady trading conditions. If arrival volumes decline in the coming days, we could see a minor upward bias in prices due to tight local stocks. Conversely, a surge in arrivals might put temporary downward pressure on modal prices. Overall, the presence of strong demand will act as a support buffer, preventing any drastic price drops. Farmers are advised to plan their sales accordingly to maximize their returns.</p>"
-            "<p>In addition, market analysts suggest that trade parameters and crop updates from other areas are also influencing local expectations. However, domestic consumption patterns remain robust, and the immediate impact of other factors is expected to be minimal. Farmers should monitor local price spreads and make informed decisions on whether to hold or sell their produce based on their individual storage capacities and financial requirements. This continuous tracking of market rates is essential for maintaining supply chain efficiency and transparency.</p>"
+            "<p>This is a long body paragraph to satisfy the pydantic validation rules. We want to ensure that the content is descriptive enough and meets the length requirements set by the schema. Prices remained stable. Local produce market committees reported steady transaction volumes today.</p>"
+            "<p>To ensure we have enough words, let's write more paragraphs. The agricultural mandi network has witnessed stable activity for Soybean today. Market transactions reflect stable supply dynamics with steady rates. In Nagpur, agricultural produce market committees report consistent numbers, which has supported the local price structure. The trade flows continue to remain resilient.</p>"
+            "<p>Trade volumes in major market yards indicate that the crop quality arriving at the platforms is satisfactory. Traders are participating in open auctions, and transactions are being settled. The steady rate of arrivals coupled with standard quality parameters has prevented any sudden volatility, maintaining a balanced environment in the agricultural ecosystem.</p>"
+            "<p>Prices remain stable across major zones. The price spreads are narrow today, indicating uniform price patterns across the reporting centers. Market participants reported normal operations during the session.</p>"
+            "<p>Furthermore, local agricultural committees and market supervisors have confirmed that the transactions are handled smoothly. Price charts indicate consistent trading within standard margins, ensuring a reliable trading experience for all participants. The agricultural infrastructure supports efficient sorting and weighing operations, contributing to overall market reliability. Market observers note that daily transactions are recorded under government oversight, which keeps the trade actions fully aligned with the regulations.</p>"
+            "<p>In addition, trade parameters and crop updates from other areas are also influencing local expectations. However, domestic consumption patterns remain robust. Farmers should monitor local price spreads and make informed decisions on their produce based on their individual storage capacities and financial requirements. This continuous tracking of market rates is essential for maintaining supply chain efficiency and transparency.</p>"
             "<div class=\"gramiq-cta\">gramiq</div>"
         ),
         keywords=["Soybean", "Maharashtra", "Mandi", "Price", "Bhav", "Market"],
@@ -282,8 +280,8 @@ def test_confidence_gate_auto_publish_success(base_analytics):
     cred_score, status = compute_confidence(article, base_analytics, {}, article.keywords)
     assert cred_score >= 0.75
     assert status == "published"
-
-
+ 
+ 
 def test_confidence_gate_review_due_to_contradiction(base_analytics):
     """Article with contradiction must be flagged for review regardless of score."""
     config.CONFIDENCE_AUTO_PUBLISH = 0.75
@@ -295,11 +293,12 @@ def test_confidence_gate_review_due_to_contradiction(base_analytics):
         meta_description="Latest Soybean Mandi Bhav in Maharashtra. Average price is Rs 6,625 with arrivals of 0 tonnes.",
         body_html=(
             "<p>We saw heavy arrivals today. Modal rate is Rs 6,625.</p>"
-            "<p>This is a long body paragraph to satisfy the pydantic validation rules. We want to ensure that the content is descriptive enough and meets the length requirements set by the schema. Prices remained stable, which is a good indicator for farmers and traders. Local produce market committees reported steady transaction volumes today.</p>"
-            "<p>To ensure we have enough words, let's write more paragraphs. The agricultural mandi network has witnessed stable activity for Soybean today. Market transactions reflect stable supply dynamics with steady buying interest from major buyers and local traders. In Nagpur, agricultural produce market committees report consistent demand, which has supported the local price structure. While overall sentiment remains cautious due to local factors, the trade flows continue to remain resilient.</p>"
-            "<p>Trade volumes and farmer participation in major market yards indicate that the crop quality arriving at the platforms is highly satisfactory. Traders are actively participating in open auctions, and transactions are being settled promptly. The steady rate of arrivals coupled with standard quality parameters has prevented any sudden volatility, maintaining a balanced environment for both buyers and sellers in the agricultural ecosystem.</p>"
-            "<p>Looking ahead, the market points to steady trading conditions. If arrival volumes decline in the coming days, we could see a minor upward bias in prices due to tight local stocks. Conversely, a surge in arrivals might put temporary downward pressure on modal prices. Overall, the presence of strong demand will act as a support buffer, preventing any drastic price drops. Farmers are advised to plan their sales accordingly to maximize their returns.</p>"
-            "<p>In addition, market analysts suggest that trade parameters and crop updates from other areas are also influencing local expectations. However, domestic consumption patterns remain robust, and the immediate impact of other factors is expected to be minimal. Farmers should monitor local price spreads and make informed decisions on whether to hold or sell their produce based on their individual storage capacities and financial requirements. This continuous tracking of market rates is essential for maintaining supply chain efficiency and transparency.</p>"
+            "<p>This is a long body paragraph to satisfy the pydantic validation rules. We want to ensure that the content is descriptive enough and meets the length requirements set by the schema. Prices remained stable. Local produce market committees reported steady transaction volumes today.</p>"
+            "<p>To ensure we have enough words, let's write more paragraphs. The agricultural mandi network has witnessed stable activity for Soybean today. Market transactions reflect stable supply dynamics with steady rates. In Nagpur, agricultural produce market committees report consistent numbers, which has supported the local price structure. The trade flows continue to remain resilient.</p>"
+            "<p>Trade volumes in major market yards indicate that the crop quality arriving at the platforms is satisfactory. Traders are participating in open auctions, and transactions are being settled. The steady rate of arrivals coupled with standard quality parameters has prevented any sudden volatility, maintaining a balanced environment in the agricultural ecosystem.</p>"
+            "<p>Prices remain stable across major zones. The price spreads are narrow today, indicating uniform price patterns across the reporting centers. Market participants reported normal operations during the session.</p>"
+            "<p>Furthermore, local agricultural committees and market supervisors have confirmed that the transactions are handled smoothly. Price charts indicate consistent trading within standard margins, ensuring a reliable trading experience for all participants. The agricultural infrastructure supports efficient sorting and weighing operations, contributing to overall market reliability. Market observers note that daily transactions are recorded under government oversight, which keeps the trade actions fully aligned with the regulations.</p>"
+            "<p>In addition, trade parameters and crop updates from other areas are also influencing local expectations. However, domestic consumption patterns remain robust. Farmers should monitor local price spreads and make informed decisions on their produce based on their individual storage capacities and financial requirements. This continuous tracking of market rates is essential for maintaining supply chain efficiency and transparency.</p>"
             "<div class=\"gramiq-cta\">gramiq</div>"
         ),
         keywords=["Soybean", "Maharashtra", "Mandi", "Price", "Bhav", "Market"],

@@ -63,6 +63,16 @@ class ArticleMetrics:
     data_source_disclosure_present: bool = True
     truthfulness_score: float = 1.0
 
+    # Content Integrity Metrics
+    supported_claims_pct: float = 1.0
+    classification_accuracy: float = 1.0
+    record_count: int = 0
+    unique_markets_count: int = 0
+    unique_varieties_count: int = 0
+    unique_grades_count: int = 0
+    report_type: str = "PRICE_SNAPSHOT"
+    data_source_status: str = "LIVE"
+
 
 @dataclass
 class EvaluationReport:
@@ -98,6 +108,14 @@ class EvaluationReport:
     pct_fallback_disclosure: float = 0.0
     pct_data_source_disclosure: float = 0.0
     avg_truthfulness_score: float = 1.0
+
+    # Content Integrity Metrics
+    avg_supported_claims_pct: float = 0.0
+    pct_classification_accuracy: float = 0.0
+    total_records_analyzed: int = 0
+    avg_unique_markets: float = 0.0
+    avg_unique_varieties: float = 0.0
+    avg_unique_grades: float = 0.0
 
     article_metrics: list[ArticleMetrics] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -155,6 +173,16 @@ def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
     # Keyword in title: any keyword phrase appears in title
     keyword_in_title = any(kw.lower() in title.lower() for kw in keywords) if keywords else False
 
+    paragraphs = re.findall(r"<p>.*?</p>", body, re.DOTALL)
+    total_paragraphs = len(paragraphs)
+    unsupported = data.get("unsupported_claims_count", 0)
+    original_total = total_paragraphs + unsupported
+    supported_claims_pct = total_paragraphs / original_total if original_total > 0 else 1.0
+
+    report_type = data.get("report_type", "PRICE_SNAPSHOT")
+    classification_ok = report_type in ["PRICE_SNAPSHOT", "MARKET_REPORT", "TREND_REPORT"]
+    classification_accuracy = 1.0 if classification_ok else 0.0
+
     return ArticleMetrics(
         file=str(file_path),
         language=data.get("language", "?"),
@@ -179,11 +207,20 @@ def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
         h2_count=h2_count,
         # Truthfulness
         contradictions_count=data.get("contradictions_count", 0),
-        unsupported_claims_count=data.get("unsupported_claims_count", 0),
+        unsupported_claims_count=unsupported,
         scope_violations_count=data.get("scope_violations_count", 0),
         fallback_disclosure_present=data.get("fallback_disclosure_present", True),
         data_source_disclosure_present=data.get("data_source_disclosure_present", True),
         truthfulness_score=data.get("truthfulness_score", 1.0),
+        # Content Integrity Metrics
+        supported_claims_pct=supported_claims_pct,
+        classification_accuracy=classification_accuracy,
+        record_count=data.get("record_count", 0),
+        unique_markets_count=data.get("unique_markets_count", 0),
+        unique_varieties_count=data.get("unique_varieties_count", 0),
+        unique_grades_count=data.get("unique_grades_count", 0),
+        report_type=report_type,
+        data_source_status=data.get("data_source_status", "LIVE"),
     )
 
 
@@ -259,6 +296,14 @@ def generate_report(date: str, output_dir: Path = OUTPUT_DIR) -> EvaluationRepor
     report.pct_data_source_disclosure = _pct(sum(1 for m in metrics_list if m.data_source_disclosure_present), n)
     report.avg_truthfulness_score = round(sum(m.truthfulness_score for m in metrics_list) / n, 3)
 
+    # Content Integrity Metrics
+    report.avg_supported_claims_pct = round(sum(m.supported_claims_pct for m in metrics_list) / n * 100.0, 1)
+    report.pct_classification_accuracy = _pct(sum(1 for m in metrics_list if m.classification_accuracy == 1.0), n)
+    report.total_records_analyzed = sum(m.record_count for m in metrics_list)
+    report.avg_unique_markets = round(sum(m.unique_markets_count for m in metrics_list) / n, 1)
+    report.avg_unique_varieties = round(sum(m.unique_varieties_count for m in metrics_list) / n, 1)
+    report.avg_unique_grades = round(sum(m.unique_grades_count for m in metrics_list) / n, 1)
+
     # Warnings for low performers
     for m in metrics_list:
         if not m.word_count_ok:
@@ -328,15 +373,34 @@ def print_report(report: EvaluationReport, pipeline_time_seconds: float = 0.0) -
         f"  ├── Minimum:                  {report.min_confidence:.3f}",
         f"  └── Maximum:                  {report.max_confidence:.3f}",
         "",
-        "  TRUTHFULNESS & TRANSPARENCY",
-        f"  ├── Contradictions:           {report.total_contradictions}  {'✅' if report.total_contradictions == 0 else '❌'}",
-        f"  ├── Unsupported claims:       {report.total_unsupported_claims}  {'✅' if report.total_unsupported_claims == 0 else '⚠️'}",
-        f"  ├── Scope violations:         {report.total_scope_violations}  {'✅' if report.total_scope_violations == 0 else '⚠️'}",
+        "  CONTENT INTEGRITY METRICS",
+        f"  ├── Supported claims %:       {report.avg_supported_claims_pct:.1f}%  {'✅' if report.avg_supported_claims_pct >= 95.0 else '⚠️'}",
+        f"  ├── Unsupported claims count: {report.total_unsupported_claims}  {'✅' if report.total_unsupported_claims == 0 else '⚠️'}",
+        f"  ├── Contradictions count:     {report.total_contradictions}  {'✅' if report.total_contradictions == 0 else '❌'}",
+        f"  ├── Scope violations count:   {report.total_scope_violations}  {'✅' if report.total_scope_violations == 0 else '⚠️'}",
+        f"  ├── Classification accuracy:  {report.pct_classification_accuracy:.1f}%  {'✅' if report.pct_classification_accuracy == 100.0 else '⚠️'}",
+        f"  ├── Total records analyzed:   {report.total_records_analyzed}",
+        f"  ├── Avg unique markets:       {report.avg_unique_markets:.1f}",
+        f"  ├── Avg unique varieties:     {report.avg_unique_varieties:.1f}",
+        f"  ├── Avg unique grades:        {report.avg_unique_grades:.1f}",
         f"  ├── Fallback disclosure:      {report.pct_fallback_disclosure}%  {'✅' if report.pct_fallback_disclosure == 100.0 else '⚠️'}",
         f"  ├── Data source disclosure:   {report.pct_data_source_disclosure}%  {'✅' if report.pct_data_source_disclosure == 100.0 else '❌'}",
         f"  └── Avg truthfulness score:   {report.avg_truthfulness_score:.3f}  {'✅' if report.avg_truthfulness_score >= 0.80 else '❌'}",
         "",
     ]
+
+    # DATA SOURCES Table
+    lines.append("  DATA SOURCES")
+    lines.append("  ┌─────────────────────────────────┬─────────────┬───────────┬─────────┬───────────┬────────┐")
+    lines.append("  │ Market Scope (Language)         │ Status      │ Type      │ Records │ Markets   │ Grades │")
+    lines.append("  ├─────────────────────────────────┼─────────────┼───────────┼─────────┼───────────┼────────┤")
+    for m in report.article_metrics:
+        scope_lang = f"{m.scope_key} ({m.language})"
+        lines.append(
+            f"  │ {scope_lang:<31} │ {m.data_source_status:<11} │ {m.report_type:<9} │ {m.record_count:<7} │ {m.unique_markets_count:<9} │ {m.unique_grades_count:<6} │"
+        )
+    lines.append("  └─────────────────────────────────┴─────────────┴───────────┴─────────┴───────────┴────────┘")
+    lines.append("")
 
     if report.warnings:
         lines.append(f"  WARNINGS ({len(report.warnings)})")
@@ -406,6 +470,14 @@ def save_report_json(report: EvaluationReport, output_dir: Path = OUTPUT_DIR) ->
             "pct_fallback_disclosure": report.pct_fallback_disclosure,
             "pct_data_source_disclosure": report.pct_data_source_disclosure,
             "avg_truthfulness_score": report.avg_truthfulness_score,
+        },
+        "content_integrity": {
+            "avg_supported_claims_pct": report.avg_supported_claims_pct,
+            "pct_classification_accuracy": report.pct_classification_accuracy,
+            "total_records_analyzed": report.total_records_analyzed,
+            "avg_unique_markets": report.avg_unique_markets,
+            "avg_unique_varieties": report.avg_unique_varieties,
+            "avg_unique_grades": report.avg_unique_grades,
         },
         "warnings": report.warnings,
         "errors": report.errors,

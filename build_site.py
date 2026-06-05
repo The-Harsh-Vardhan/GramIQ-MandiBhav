@@ -99,15 +99,11 @@ ARTICLE_TYPE_LABELS = {
 # Slug helpers
 # ---------------------------------------------------------------------------
 
-def scope_to_slug(scope_key: str, commodity: str) -> str:
-    """Convert scope_key to a URL-safe slug.
+LATEST_DATES = {}
 
-    Examples:
-        soybean_madhya_pradesh       → madhya-pradesh
-        soybean_national             → national
-        soybean_best_market_today    → best-market-today
-        cotton_gujarat               → gujarat
-    """
+
+def scope_to_slug(scope_key: str, commodity: str) -> str:
+    """Convert scope_key to a URL-safe slug."""
     prefix = commodity + "_"
     slug = scope_key.removeprefix(prefix)
     return slug.replace("_", "-")
@@ -118,9 +114,19 @@ def article_url(article: dict, base_url: str = "") -> str:
     lang  = article.get("language", "en")
     comm  = article.get("commodity", "unknown")
     slug  = scope_to_slug(article.get("scope_key", "unknown"), comm)
-    if lang == "en":
-        return f"{base_url}/{comm}/{slug}/"
-    return f"{base_url}/{lang}/{comm}/{slug}/"
+    date_str = article.get("date", "")
+    sk = article.get("scope_key", "unknown")
+    
+    is_latest = LATEST_DATES.get((sk, lang)) == date_str
+    
+    if is_latest:
+        if lang == "en":
+            return f"{base_url}/{comm}/{slug}/"
+        return f"{base_url}/{lang}/{comm}/{slug}/"
+    else:
+        if lang == "en":
+            return f"{base_url}/{comm}/{slug}/{date_str}/"
+        return f"{base_url}/{lang}/{comm}/{slug}/{date_str}/"
 
 
 def article_file_path(article: dict, site_dir: Path) -> Path:
@@ -128,9 +134,10 @@ def article_file_path(article: dict, site_dir: Path) -> Path:
     lang = article.get("language", "en")
     comm = article.get("commodity", "unknown")
     slug = scope_to_slug(article.get("scope_key", "unknown"), comm)
+    date_str = article.get("date", "")
     if lang == "en":
-        return site_dir / comm / slug / "index.html"
-    return site_dir / lang / comm / slug / "index.html"
+        return site_dir / comm / slug / date_str / "index.html"
+    return site_dir / lang / comm / slug / date_str / "index.html"
 
 
 # ---------------------------------------------------------------------------
@@ -138,39 +145,34 @@ def article_file_path(article: dict, site_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 def discover_articles(output_dir: Path, date: str) -> list[dict]:
-    """Load all published (and review) article JSON files for a given date."""
-    date_dir = output_dir / date
-    if not date_dir.exists():
-        # Try with partial match (e.g. "2026-06-04" might have " Test 1" suffix in dev)
-        candidates = sorted(
-            [d for d in output_dir.iterdir() if d.is_dir() and date in d.name],
-            key=lambda d: d.name,
-            reverse=True,
-        )
-        if not candidates:
-            logger.error("No output directory found for date %s in %s", date, output_dir)
-            return []
-        date_dir = candidates[0]
-        logger.info("Using output directory: %s", date_dir)
+    """Load all published (and review) article JSON files across all date directories."""
+    date_dirs = []
+    for item in output_dir.iterdir():
+        if item.is_dir():
+            match = re.match(r"^(\d{4}-\d{2}-\d{2})", item.name)
+            if match:
+                date_dirs.append(item)
+                
+    if not date_dirs:
+        logger.error("No date directories found in %s", output_dir)
+        return []
 
     articles: list[dict] = []
-    quality_report = date_dir / "quality_report.json"
-
-    for json_file in sorted(date_dir.rglob("*.json")):
-        if json_file.name == "quality_report.json":
-            continue
-        try:
-            with open(json_file, encoding="utf-8") as f:
-                data = json.load(f)
-            # Only include published and review_required articles
-            status = data.get("publish_status", "published")
-            if status == "blocked":
+    for date_dir in date_dirs:
+        for json_file in sorted(date_dir.rglob("*.json")):
+            if json_file.name == "quality_report.json":
                 continue
-            articles.append(data)
-        except Exception as e:
-            logger.warning("Skipping %s: %s", json_file, e)
+            try:
+                with open(json_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                status = data.get("publish_status", "published")
+                if status == "blocked":
+                    continue
+                articles.append(data)
+            except Exception as e:
+                logger.warning("Skipping %s: %s", json_file, e)
 
-    logger.info("Discovered %d articles for date %s", len(articles), date)
+    logger.info("Discovered %d articles across all date directories", len(articles))
     return articles
 
 
@@ -202,6 +204,9 @@ def build_registry(articles: list[dict]) -> dict:
       "all_commodities": {"soybean", "cotton"},
     }
     """
+    global LATEST_DATES
+    LATEST_DATES.clear()
+    
     reg: dict = {
         "by_scope_lang": {},
         "by_commodity_lang": {},
@@ -210,13 +215,28 @@ def build_registry(articles: list[dict]) -> dict:
         "all_commodities": set(),
     }
 
+    # Populate LATEST_DATES first
+    for a in articles:
+        sk   = a.get("scope_key", "")
+        lang = a.get("language", "en")
+        dt   = a.get("date", "")
+        if not dt:
+            continue
+        key = (sk, lang)
+        if key not in LATEST_DATES or dt > LATEST_DATES[key]:
+            LATEST_DATES[key] = dt
+
     for a in articles:
         sk   = a.get("scope_key", "")
         lang = a.get("language", "en")
         comm = a.get("commodity", "")
         atype = a.get("article_type", "")
+        dt   = a.get("date", "")
 
-        reg["by_scope_lang"][(sk, lang)] = a
+        key_sl = (sk, lang)
+        # Only store the latest article in by_scope_lang
+        if key_sl not in reg["by_scope_lang"] or dt > reg["by_scope_lang"][key_sl].get("date", ""):
+            reg["by_scope_lang"][key_sl] = a
 
         key_cl = (comm, lang)
         reg["by_commodity_lang"].setdefault(key_cl, []).append(a)
@@ -360,11 +380,24 @@ def render_article_pages(articles: list[dict], registry: dict,
             "available_langs":  available_lang_links(scope_key, registry, base_url),
         }
 
+        date_str = article.get("date", "")
         out_path = article_file_path(article, site_dir)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(template.render(**ctx))
         count += 1
+
+        # Write to the root/canonical path if it is the latest
+        is_latest = LATEST_DATES.get((scope_key, lang)) == date_str
+        if is_latest:
+            if lang == "en":
+                root_path = site_dir / comm / scope_slug / "index.html"
+            else:
+                root_path = site_dir / lang / comm / scope_slug / "index.html"
+            root_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write(template.render(**ctx))
+            logger.debug("Latest article written to root: %s", root_path.relative_to(site_dir))
 
     return count
 
@@ -384,9 +417,16 @@ def render_commodity_pages(registry: dict, env: Environment,
             if not articles_cl:
                 continue
 
-            # Group articles by type
+            # Find the latest date for this commodity from the English articles
+            comm_en_articles = registry["by_commodity_lang"].get((comm, "en"), [])
+            latest_comm_date = max(a.get("date", "") for a in comm_en_articles) if comm_en_articles else date
+
+            # Filter articles to only the latest date
+            latest_articles_cl = [a for a in articles_cl if a.get("date") == latest_comm_date]
+
+            # Group articles by type (only for the latest date)
             groups_dict: dict = {}
-            for a in articles_cl:
+            for a in latest_articles_cl:
                 atype = a.get("article_type", "other")
                 groups_dict.setdefault(atype, []).append(a)
 
@@ -419,6 +459,25 @@ def render_commodity_pages(registry: dict, env: Environment,
 
             canon_url = f"{base_url}/{comm}/" if lang == "en" else f"{base_url}/{lang}/{comm}/"
 
+            # Find all unique dates for this commodity (sorted descending)
+            unique_dates = sorted(list(set(a.get("date") for a in articles_cl if a.get("date"))), reverse=True)
+            archive_list = []
+            for d in unique_dates:
+                # Find the primary report for this date
+                date_articles = [a for a in articles_cl if a.get("date") == d]
+                national_art = None
+                for a in date_articles:
+                    if a.get("article_type") == "daily_commodity_report" or "national" in a.get("scope_key", "") or "nagpur" in a.get("scope_key", ""):
+                        national_art = a
+                        break
+                if not national_art and date_articles:
+                    national_art = date_articles[0]
+                if national_art:
+                    archive_list.append({
+                        "date": d,
+                        "url": article_url(national_art, ""),
+                    })
+
             ctx = {
                 **base_context(base_url, lang),
                 "page_title":       f"{meta['name']} Mandi Bhav Today | {SITE_TITLE}",
@@ -432,12 +491,13 @@ def render_commodity_pages(registry: dict, env: Environment,
                 # Template-specific
                 "commodity":        meta,
                 "article_groups":   article_groups,
-                "total_articles":   len(articles_cl),
-                "latest_date":      date,
+                "total_articles":   len(latest_articles_cl),
+                "latest_date":      latest_comm_date,
                 "lang_label":       LANGUAGES[lang]["label"],
                 "lang_variants":    lang_variants,
                 "msp_info":         {"year": meta["msp_year"], "value": meta["msp_value"]},
                 "current_lang":     lang,
+                "archive_list":     archive_list,
             }
 
             if lang == "en":
@@ -458,8 +518,12 @@ def render_homepage(registry: dict, env: Environment,
     """Render the root index.html homepage."""
     template = env.get_template("homepage.html")
 
-    # Recent articles (latest 6 EN, sorted by scope_key for stability)
-    en_articles = sorted(registry["en_articles"], key=lambda a: a.get("scope_key", ""))[:6]
+    en_articles = registry["en_articles"]
+    latest_overall_date = max(a.get("date", "") for a in en_articles) if en_articles else date
+
+    # Filter to only the latest date
+    latest_en_articles = [a for a in en_articles if a.get("date") == latest_overall_date]
+    recent_en = sorted(latest_en_articles, key=lambda a: a.get("scope_key", ""))[:6]
     recent = [
         {
             "title":      a.get("title", ""),
@@ -469,17 +533,19 @@ def render_homepage(registry: dict, env: Environment,
             "date":       a.get("date", ""),
             "lang":       "en",
         }
-        for a in en_articles
+        for a in recent_en
     ]
 
     commodities = []
     for comm, meta in COMMODITY_META.items():
-        en_count = len(registry["by_commodity_lang"].get((comm, "en"), []))
+        # Count only latest articles for the homepage view
+        latest_comm_articles = [a for a in registry["by_commodity_lang"].get((comm, "en"), []) if a.get("date") == latest_overall_date]
+        en_count = len(latest_comm_articles)
         if en_count == 0:
             continue
         lang_count = sum(
             1 for code in LANGUAGES
-            if registry["by_commodity_lang"].get((comm, code))
+            if any(a.get("date") == latest_overall_date for a in registry["by_commodity_lang"].get((comm, code), []))
         )
         commodities.append({
             **meta,
@@ -490,10 +556,28 @@ def render_homepage(registry: dict, env: Environment,
         })
 
     total_markets = max(
-        (len({row.get("market") for a in registry["en_articles"]
+        (len({row.get("market") for a in latest_en_articles
                for row in a.get("market_summary_table", [])})),
         0,
     )
+
+    # Archive list
+    unique_dates = sorted(list(set(a.get("date") for a in en_articles if a.get("date"))), reverse=True)
+    archive_list = []
+    for d in unique_dates:
+        date_articles = [a for a in en_articles if a.get("date") == d]
+        national_art = None
+        for a in date_articles:
+            if a.get("article_type") == "daily_commodity_report" or "national" in a.get("scope_key", "") or "nagpur" in a.get("scope_key", ""):
+                national_art = a
+                break
+        if not national_art and date_articles:
+            national_art = date_articles[0]
+        if national_art:
+            archive_list.append({
+                "date": d,
+                "url": article_url(national_art, ""),
+            })
 
     ctx = {
         **base_context(base_url, "en"),
@@ -505,11 +589,12 @@ def render_homepage(registry: dict, env: Environment,
         "active_nav":       "home",
         "json_ld_blocks":   [],
         # Template-specific
-        "latest_date":      date,
+        "latest_date":      latest_overall_date,
         "commodities":      commodities,
         "recent_articles":  recent,
+        "archive_list":     archive_list,
         "stats": {
-            "total_articles": len(registry["en_articles"]),
+            "total_articles": len(latest_en_articles),
             "total_markets":  total_markets,
         },
     }
@@ -562,7 +647,7 @@ def generate_sitemap(registry: dict, base_url: str, date: str, site_dir: Path) -
     out = site_dir / "sitemap.xml"
     out.write_text("\n".join(lines), encoding="utf-8")
     url_count = sum(1 for l in lines if l.strip() == "<url>")
-    logger.info("Generated sitemap.xml with %d URLs", url_count)
+    logger.debug("Generated sitemap.xml with %d URLs", url_count)
 
 
 # ---------------------------------------------------------------------------
@@ -574,7 +659,13 @@ def generate_rss(registry: dict, base_url: str, date: str, site_dir: Path) -> No
     now_rfc = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
     items = []
-    for a in sorted(registry["en_articles"], key=lambda x: x.get("scope_key", ""))[:20]:
+    # Sort by date descending, then scope key ascending
+    sorted_articles = sorted(
+        registry["en_articles"],
+        key=lambda x: (x.get("date", ""), x.get("scope_key", "")),
+        reverse=True
+    )
+    for a in sorted_articles[:20]:
         url   = base_url + article_url(a, "")
         title = xml_escape(a.get("title", ""))
         desc  = xml_escape(a.get("meta_description", ""))
@@ -603,7 +694,7 @@ def generate_rss(registry: dict, base_url: str, date: str, site_dir: Path) -> No
 </rss>"""
 
     (site_dir / "rss.xml").write_text(feed, encoding="utf-8")
-    logger.info("Generated rss.xml with %d items", len(items))
+    logger.debug("Generated rss.xml with %d items", len(items))
 
 
 # ---------------------------------------------------------------------------
@@ -638,7 +729,7 @@ def generate_search_json(registry: dict, base_url: str, site_dir: Path) -> None:
         json.dumps(index, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    logger.info("Generated search.json with %d entries", len(index))
+    logger.debug("Generated search.json with %d entries", len(index))
 
 
 # ---------------------------------------------------------------------------
@@ -707,6 +798,114 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def sync_database_to_output(output_dir: Path) -> None:
+    """Read all articles from the database and write them back to output/ if missing."""
+    import sqlite3
+    import json
+    from database import DB_PATH
+    
+    if not DB_PATH.exists():
+        logger.info("Database file not found at %s. Skipping DB-to-output sync.", DB_PATH)
+        return
+        
+    logger.info("Syncing articles from database to output directory...")
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM articles")
+        rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        logger.error("Failed to query articles from database: %s", e)
+        return
+
+    synced_count = 0
+    for row in rows:
+        try:
+            r = dict(row)
+            article_data = {
+                "title": r["title"],
+                "seo_title": r.get("title"),
+                "meta_description": r["meta_description"],
+                "body": r["body_html"],
+                "keywords": json.loads(r["keywords"]) if r["keywords"] else [],
+                "language": r["language"],
+                "date": r["article_date"],
+                "commodity": r["commodity_slug"],
+                "article_type": r["article_type"],
+                "scope_key": r["scope_key"],
+                "json_ld": json.loads(r["json_ld"]) if r["json_ld"] else {},
+                "faq_json_ld": json.loads(r["faq_json_ld"]) if r["faq_json_ld"] else {},
+                "faqs": json.loads(r["faqs"]) if r["faqs"] else [],
+                "confidence_score": r["confidence_score"],
+                "publish_status": r["publish_status"],
+                "pipeline_run_id": r["pipeline_run_id"],
+                "generated_at": r.get("created_at", datetime.now().isoformat()),
+                "credibility_score": r["confidence_score"],
+                "data_source_status": "LIVE",
+                "report_type": "PRICE_SNAPSHOT",
+                "contradictions_count": 0,
+                "unsupported_claims_count": 0,
+                "scope_violations_count": 0,
+                "truthfulness_score": 1.0,
+                "fallback_disclosure_present": True,
+                "data_source_disclosure_present": True,
+                "unique_markets_count": 1,
+                "unique_varieties_count": 0,
+                "unique_grades_count": 0,
+                "record_count": 0,
+            }
+            
+            # Map pre-computed analytics if present
+            if r["pre_computed_analytics"]:
+                try:
+                    analytics = json.loads(r["pre_computed_analytics"])
+                    article_data["credibility_score"] = analytics.get("credibility_score", r["confidence_score"])
+                    article_data["data_source_status"] = analytics.get("data_source_status", "LIVE")
+                    article_data["report_type"] = analytics.get("report_type", "PRICE_SNAPSHOT")
+                    article_data["contradictions_count"] = analytics.get("contradictions_count", 0)
+                    article_data["unsupported_claims_count"] = analytics.get("unsupported_claims_count", 0)
+                    article_data["scope_violations_count"] = analytics.get("scope_violations_count", 0)
+                    article_data["truthfulness_score"] = analytics.get("truthfulness_score", 1.0)
+                    article_data["fallback_disclosure_present"] = analytics.get("fallback_disclosure_present", True)
+                    article_data["data_source_disclosure_present"] = analytics.get("data_source_disclosure_present", True)
+                    article_data["unique_markets_count"] = analytics.get("unique_markets_count", 1)
+                    article_data["unique_varieties_count"] = analytics.get("unique_varieties_count", 0)
+                    article_data["unique_grades_count"] = analytics.get("unique_grades_count", 0)
+                    article_data["record_count"] = analytics.get("record_count", 0)
+                except Exception:
+                    pass
+
+            # Write to output folder
+            date_str = r["article_date"]
+            scope = r["scope_key"]
+            lang = r["language"]
+            status = r["publish_status"]
+            
+            if status == "published":
+                file_dir = output_dir / date_str / scope
+                file_path = file_dir / f"{lang}.json"
+            elif status == "review_required":
+                file_dir = output_dir / date_str / "review"
+                file_path = file_dir / f"{scope}_{lang}.json"
+            else:  # blocked
+                file_dir = output_dir / date_str / "blocked"
+                file_path = file_dir / f"{scope}_{lang}.json"
+                
+            # Only write if file doesn't exist to avoid unnecessary disk writes
+            if not file_path.exists():
+                file_dir.mkdir(parents=True, exist_ok=True)
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(article_data, f, ensure_ascii=False, indent=2)
+                synced_count += 1
+        except Exception as e:
+            logger.warning("Failed to sync database article: %s", e)
+            
+    if synced_count > 0:
+        logger.info("Successfully synced %d articles from database to output folder.", synced_count)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -724,6 +923,12 @@ def main() -> None:
     site_dir     = Path(args.site_dir)
     base_url     = args.base_url.rstrip("/")
     templates_dir = SITE_TEMPLATES_DIR
+
+    # Sync database articles to output directory first
+    try:
+        sync_database_to_output(output_dir)
+    except Exception as e:
+        logger.warning("Database to output sync failed: %s", e)
 
     # Determine date
     if args.date:

@@ -111,6 +111,9 @@ class AnalyticsPayload(BaseModel):
     market_significance: Optional[str] = None      # For spotlight articles
     record_count: int = 0
     data_source_status: Optional[str] = None
+    unique_markets_count: int = 0
+    unique_varieties_count: int = 0
+    unique_grades_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +154,7 @@ class ArticleOutput(BaseModel):
     keywords: list[str] = Field(min_length=2, max_length=10)
     market_summary_table: list[MarketRow] = Field(default_factory=list)
     faqs: list[FAQItem] = Field(min_length=2, max_length=3)
+    observed_facts: list[str] = Field(default_factory=list)
 
     @field_validator("body_html", mode="after")
     @classmethod
@@ -219,10 +223,14 @@ class FinalArticleJSON(BaseModel):
     generated_at: str           # ISO datetime
     credibility_score: float = 0.0
     data_source_status: str = "LIVE"
-    report_type: str = "FULL_REPORT"
+    report_type: str = "PRICE_SNAPSHOT"
     contradictions_count: int = 0
     unsupported_claims_count: int = 0
     scope_violations_count: int = 0
     truthfulness_score: float = 1.0
     fallback_disclosure_present: bool = True
     data_source_disclosure_present: bool = True
+    unique_markets_count: int = 0
+    unique_varieties_count: int = 0
+    unique_grades_count: int = 0
+    record_count: int = 0

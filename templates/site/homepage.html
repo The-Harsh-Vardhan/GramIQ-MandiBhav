@@ -190,6 +190,27 @@
 </section>
 
 {# ============================================================
+   HISTORICAL ARCHIVE SECTION
+   ============================================================ #}
+{% if archive_list %}
+<section class="section" style="padding-top: 0;">
+  <div class="container">
+    <div class="section-header" style="text-align: left;">
+      <h2>Browse Historical Reports</h2>
+      <p style="margin-top: 4px;">Select a date below to view the mandi price archive</p>
+    </div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+      {% for item in archive_list %}
+      <a href="{{ base_url }}{{ item.url }}" class="lang-pill" id="archive-date-{{ item.date }}">
+        {{ item.date | format_date }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ============================================================
    FEATURES & BENEFITS SECTION
    ============================================================ #}
 <section class="section features-section">

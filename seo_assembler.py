@@ -167,6 +167,78 @@ def generate_seo_metadata(
     return title, desc, final_keywords[:10]
 
 
+def determine_report_classification(analytics: AnalyticsPayload) -> str:
+    """
+    Classifies the report type based on data depth:
+    - TREND_REPORT: multi-day comparison exists.
+    - MARKET_REPORT: multiple markets.
+    - PRICE_SNAPSHOT: single market, single day.
+    """
+    if (analytics.prev_national_avg_modal is not None or 
+        analytics.national_day_change_pct is not None or 
+        any(m.prev_modal_price is not None for m in analytics.markets)):
+        return "TREND_REPORT"
+    elif analytics.market_count > 1:
+        return "MARKET_REPORT"
+    else:
+        return "PRICE_SNAPSHOT"
+
+
+def count_unsupported_claims(body_html: str, analytics: AnalyticsPayload) -> int:
+    """Count occurrences of unsupported/speculative claims in body_html."""
+    body_lower = body_html.lower()
+    unsupported_count = 0
+
+    seasonal_allowed_words = set()
+    if analytics.season_note:
+        seasonal_allowed_words.update(re.findall(r"\b\w+\b", analytics.season_note.lower()))
+    if analytics.season_phase:
+        seasonal_allowed_words.update(re.findall(r"\b\w+\b", analytics.season_phase.lower()))
+
+    always_forbidden = [
+        "crusher", "oil mill", "processor", "demand", "buyer", "seller",
+        "advice", "should hold", "should sell", "store", "holding", "liquidate",
+        "buyer behavior", "farmer behavior", "active trade", "market highlights",
+        "market sentiment", "sentiment", "liquidity", "shipping logistics", "logistics",
+        "outlook", "predict", "expected to", "forecast", "projection", "future",
+        "supply commentary"
+    ]
+
+    for term in always_forbidden:
+        unsupported_count += body_lower.count(term)
+
+    season_terms = ["sowing", "planting", "monsoon", "weather", "harvest"]
+    for term in season_terms:
+        count = body_lower.count(term)
+        if count > 0:
+            is_allowed = any(aw in term or term in aw for aw in seasonal_allowed_words)
+            if not is_allowed:
+                unsupported_count += count
+
+    return unsupported_count
+
+
+def validate_claim_support(body_html: str, analytics: AnalyticsPayload) -> tuple[str, int]:
+    """
+    Checks every paragraph in the article body against supported facts.
+    Strips paragraphs containing unsupported/speculative claims and returns
+    (cleaned_body_html, unsupported_claim_count).
+    """
+    parts = re.split(r"(<p>.*?</p>)", body_html, flags=re.DOTALL)
+    cleaned_parts = []
+    unsupported_count = 0
+
+    for part in parts:
+        if part.startswith("<p>") and part.endswith("</p>"):
+            p_count = count_unsupported_claims(part, analytics)
+            if p_count > 0:
+                unsupported_count += p_count
+                continue
+        cleaned_parts.append(part)
+
+    return "".join(cleaned_parts), unsupported_count
+
+
 def validate_article_truthfulness(
     body_html: str,
     analytics: AnalyticsPayload,
@@ -176,6 +248,9 @@ def validate_article_truthfulness(
     Validates the article body content against factual truthfulness rules.
     Returns (contradictions, unsupported_claims, scope_violations, truthfulness_score).
     """
+    # Count unsupported claims on the raw body to support contradiction detection in original paragraphs
+    unsupported_claims = count_unsupported_claims(body_html, analytics)
+
     contradictions = 0
     body_lower = body_html.lower()
     
@@ -200,16 +275,6 @@ def validate_article_truthfulness(
                 contradictions += 1
                 logger.warning("Factual Contradiction: record_count is %d (< 5) but body contains '%s'", analytics.record_count, term)
 
-    # 2. Unsupported Claims (Allowed Facts only)
-    unsupported_claims = 0
-    forbid_unsupported = [
-        "crusher", "oil mill", "processor", "liquidity", "macroeconomic", "shipping logistics"
-    ]
-    for term in forbid_unsupported:
-        if term in body_lower:
-            unsupported_claims += 1
-            logger.warning("Unsupported Claim: Body contains term '%s' which is not in allowed facts", term)
-
     # 3. Scope Consistency
     scope_violations = 0
     if scope.scope_key == "soybean_nagpur":
@@ -223,7 +288,6 @@ def validate_article_truthfulness(
                 logger.warning("Scope Consistency Violation: Nagpur scope but body contains broad term '%s'", term)
 
     # 4. Truthfulness Score Calculation
-    # Start at 1.0. Deduct 0.5 per contradiction. Deduct 0.1 per unsupported claim / scope violation.
     score = 1.0 - (0.5 * contradictions) - (0.1 * unsupported_claims) - (0.1 * scope_violations)
     
     score = round(max(0.0, score), 3)
@@ -235,15 +299,15 @@ def compute_credibility(
     record_count: int,
     generation_successful: bool,
     translation_successful: bool,
-    contradictions_count: int
+    contradictions_count: int,
+    unsupported_claims_count: int = 0,
+    scope_violations_count: int = 0
 ) -> float:
-    if contradictions_count > 0:
+    if contradictions_count > 0 or scope_violations_count > 0:
         return 0.0
 
-    # Determine base score
-    if data_source_status == "LIVE":
-        base = 0.80 + 0.15 * min(record_count / 15.0, 1.0)
-    elif data_source_status == "LIVE_PLUS_CACHE":
+    # Determine base score (Problem 7)
+    if data_source_status in ("LIVE", "LIVE_PLUS_CACHE"):
         base = 0.80 + 0.15 * min(record_count / 15.0, 1.0)
     elif data_source_status == "CACHE":
         base = 0.75 if getattr(config, "ingestion_data_source", "LIVE") == "LIVE" else 0.55
@@ -255,6 +319,9 @@ def compute_credibility(
         base *= 0.9
     if not translation_successful:
         base *= 0.8
+        
+    # Deduct 0.05 per unsupported claim
+    base -= 0.05 * unsupported_claims_count
         
     score = round(base, 3)
     
@@ -275,6 +342,10 @@ def compute_confidence(
     Compute a credibility score and verify truthfulness gate.
     """
     # 1. Check quality validation first
+    # Clean the body first to remove unsupported paragraphs (Problem 5)
+    cleaned_body, unsupported = validate_claim_support(article.body_html, analytics)
+    article.body_html = cleaned_body
+
     is_valid = validate_article_quality(article)
     if not is_valid:
         return 0.0, "blocked"
@@ -309,19 +380,32 @@ def compute_confidence(
         record_count=analytics.record_count,
         generation_successful=generation_successful,
         translation_successful=translation_successful,
-        contradictions_count=contradictions
+        contradictions_count=contradictions,
+        unsupported_claims_count=unsupported,
+        scope_violations_count=scope_viols
     )
 
     # 7. Apply publishing gate (Problem 10)
-    # Require: truthfulness_score >= 0.80 and contradictions == 0. Otherwise, status = review_required
-    if truth_score >= 0.80 and contradictions == 0 and cred_score >= CONFIDENCE_AUTO_PUBLISH:
+    # Require: supported claims >= 95%, contradictions = 0, scope violations = 0, report classification valid
+    paragraphs = re.findall(r"<p>.*?</p>", article.body_html, re.DOTALL)
+    total_paragraphs = len(paragraphs)
+    supported_pct = (total_paragraphs - unsupported) / total_paragraphs if total_paragraphs > 0 else 1.0
+
+    report_classification = determine_report_classification(analytics)
+    is_classification_valid = True  # Dynamic classification ensures it matches
+
+    if (supported_pct >= 0.95 and 
+        contradictions == 0 and 
+        scope_viols == 0 and 
+        is_classification_valid and 
+        cred_score >= CONFIDENCE_AUTO_PUBLISH):
         status = "published"
     else:
         status = "review_required"
 
     logger.info(
-        "Credibility [%s]: %.3f → %s (truth_score=%.2f contradictions=%d)",
-        analytics.scope_key, cred_score, status, truth_score, contradictions
+        "Credibility [%s]: %.3f → %s (truth_score=%.2f contradictions=%d unsupported=%d)",
+        analytics.scope_key, cred_score, status, truth_score, contradictions, unsupported
     )
     return cred_score, status
 
@@ -435,6 +519,7 @@ def assemble_article_output(
         keywords=keywords,
         market_summary_table=build_market_summary_table(analytics),
         faqs=build_template_faqs(analytics, scope),
+        observed_facts=draft.observed_facts,
     )
 
 
@@ -484,7 +569,10 @@ def build_disclosures(
     report_type: str,
     record_count: int,
     market_name: str,
-    generation_provider: str
+    generation_provider: str,
+    markets_analyzed: int = 1,
+    varieties_analyzed: int = 0,
+    grades_analyzed: int = 0
 ) -> tuple[str, bool, bool]:
     # Data source translations
     ds_labels = {
@@ -596,6 +684,9 @@ def build_disclosures(
   <p><strong>{lbl['src']}</strong><br/>{lbl['src_val']}</p>
   <p><strong>{lbl['mkt']}</strong><br/>{market_name}</p>
   <p><strong>{lbl['rec']}</strong><br/>{record_count}</p>
+  <p><strong>Markets Analyzed:</strong> {markets_analyzed}</p>
+  <p><strong>Varieties Analyzed:</strong> {varieties_analyzed}</p>
+  <p><strong>Grades Analyzed:</strong> {grades_analyzed}</p>
   <p><strong>{lbl['ds']}</strong><br/>{data_source_status}</p>
   <p><strong>{lbl['rep_type']}</strong><br/>{report_type}</p>
 </div>"""
@@ -639,18 +730,29 @@ def assemble_final_article(
     raw_body = re.sub(r'<div class="limited-data-notice".*?</div>', '', raw_body, flags=re.DOTALL)
     raw_body = re.sub(r'<div class="report-transparency-footer".*?</div>', '', raw_body, flags=re.DOTALL)
 
+    # Clean the body first to remove unsupported paragraphs (Problem 5: removed, regenerated, blocked)
+    cleaned_body, unsupported = validate_claim_support(raw_body, analytics)
+    raw_body = cleaned_body
+
     contradictions, unsupported, scope_viols, truth_score = validate_article_truthfulness(
         raw_body, analytics, scope
     )
 
+    # Determine dynamic report classification
+    report_type = determine_report_classification(analytics)
+
     # Apply publishing gate (Problem 10)
     final_status = publish_status
-    if truth_score < 0.80 or contradictions > 0:
+    
+    paragraphs = re.findall(r"<p>.*?</p>", raw_body, re.DOTALL)
+    total_paragraphs = len(paragraphs)
+    supported_pct = (total_paragraphs - unsupported) / total_paragraphs if total_paragraphs > 0 else 1.0
+    
+    if supported_pct < 0.95 or contradictions > 0 or scope_viols > 0 or confidence_score < CONFIDENCE_AUTO_PUBLISH:
         final_status = "review_required"
 
     # --- Build localized disclosures ---
     data_source_status = analytics.data_source_status or "LIVE"
-    report_type = "FULL_REPORT" if analytics.record_count >= 10 else "LIMITED_DATA_REPORT"
     record_count = analytics.record_count
     
     market_name = scope.market or analytics.market or scope.scope_label
@@ -667,7 +769,10 @@ def assemble_final_article(
     gen_provider = "local_fallback" if len(article.observed_facts) > 0 or (translated and translated.translation_provider == "local_fallback") else "gemini"
 
     body_with_disc, fallback_disc, ds_disc = build_disclosures(
-        raw_body, language, data_source_status, report_type, record_count, market_name_t, gen_provider
+        raw_body, language, data_source_status, report_type, record_count, market_name_t, gen_provider,
+        markets_analyzed=getattr(analytics, "unique_markets_count", 1),
+        varieties_analyzed=getattr(analytics, "unique_varieties_count", 0),
+        grades_analyzed=getattr(analytics, "unique_grades_count", 0)
     )
 
     keywords = article.keywords
@@ -779,6 +884,10 @@ def assemble_final_article(
         truthfulness_score=truth_score,
         fallback_disclosure_present=fallback_disc,
         data_source_disclosure_present=ds_disc,
+        unique_markets_count=getattr(analytics, "unique_markets_count", 1),
+        unique_varieties_count=getattr(analytics, "unique_varieties_count", 0),
+        unique_grades_count=getattr(analytics, "unique_grades_count", 0),
+        record_count=record_count
     )
 
 

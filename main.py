@@ -90,7 +90,23 @@ Examples:
     parser.add_argument(
         "--date",
         default=date_cls.today().isoformat(),
-        help="Target date in YYYY-MM-DD format (default: today)",
+        help="Target date in YYYY-MM-DD or other supported formats (default: today)",
+    )
+    parser.add_argument(
+        "--backfill-days",
+        type=int,
+        default=None,
+        help="Backfill N days ending at target date",
+    )
+    parser.add_argument(
+        "--start-date",
+        default=None,
+        help="Start date for backfill range",
+    )
+    parser.add_argument(
+        "--end-date",
+        default=None,
+        help="End date for backfill range",
     )
     parser.add_argument(
         "--mode",
@@ -509,114 +525,26 @@ def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool)
 # Main orchestrator
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    args = parse_args()
-
-    # Evaluate-only mode
-    if args.evaluate_only:
-        from evaluate import generate_report, print_report, save_report_json
-        report = generate_report(args.date)
-        print_report(report)
-        save_report_json(report)
-        return
-
-    pipeline_start = time.time()
-
-    # Stage 0: Init
-    run_id, mode = stage_init(args)
-
-    # Load knowledge layer (once, shared across all stages)
+def print_demo_summary(analytics_map: dict, current_date: str, args: argparse.Namespace, pipeline_duration: float) -> None:
     import config
-    knowledge = config.load_knowledge()
-    logger.info("Knowledge loaded: %d domains", len(knowledge))
+    chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
+    ogd_records_count = getattr(config, "demo_records_count", 0)
+    db_inserted = getattr(config, "db_inserted", 0)
+    db_duplicates = getattr(config, "db_duplicates", 0)
+    avg_price = getattr(config, "demo_avg_price", 0.0)
+    gen_status = getattr(config, "demo_gen_status", "Article Generated")
+    trans_hi = "✓" if getattr(config, "demo_trans_hi_ok", False) else "✗"
+    trans_mr = "✓" if getattr(config, "demo_trans_mr_ok", False) else "✗"
+    if args.skip_publish:
+        pub_status = "SKIPPED"
+    else:
+        pub_status = "✓" if getattr(config, "demo_publish_ok", False) else "✗"
 
-    # Determine commodities to process
-    commodities = args.commodities or config.COMMODITIES
-    if mode == "demo":
-        commodities = ["soybean"]
-    logger.info("Commodities: %s", ", ".join(commodities))
+    # Get data source status for nagpur demo
+    nagpur_payload = analytics_map.get("soybean_nagpur")
+    ds_status = nagpur_payload.data_source_status if nagpur_payload else getattr(config, "ingestion_data_source", "LIVE")
 
-    # Log pipeline run
-    from database import log_pipeline_run
-    log_pipeline_run(run_id, args.date, mode)
-
-    # Stage 1: Ingest
-    logger.info("--- Stage 1: Data Ingestion ---")
-    stage_ingest(args.date, commodities)
-
-    # Resolve Latest Available Date for demo mode after ingestion
-    if mode == "demo":
-        from database import query_latest_available_date
-        latest_date = query_latest_available_date("soybean")
-        if latest_date:
-            logger.info("Demo Mode: Overriding target date from %s to latest available date %s", args.date, latest_date)
-            args.date = latest_date
-
-    # Stage 2: Analytics
-    logger.info("--- Stage 2: Analytics Pre-Computation ---")
-    analytics_map, scope_targets = stage_analytics(args.date, knowledge)
-    config.analytics_payloads_cache = analytics_map
-
-    if not scope_targets:
-        logger.error("No scope targets built — check if market data was ingested correctly.")
-        sys.exit(1)
-
-    # Stage 3: Generate + Translate + Assemble
-    logger.info("--- Stage 3: Content Generation & Translation ---")
-    logger.info("Generating %d articles ...", len(scope_targets))
-
-    # Auto-skip translation in demo mode unless explicitly forced
-    skip_translate = args.skip_translate
-
-    published, review, blocked = stage_generate_and_assemble(
-        args.date, run_id, analytics_map, scope_targets, knowledge, skip_translate
-    )
-
-    pipeline_duration = time.time() - pipeline_start
-
-    # Update pipeline run record
-    from database import update_pipeline_run
-    total_attempted = len(scope_targets)
-    update_pipeline_run(run_id, {
-        "articles_attempted": total_attempted,
-        "articles_published": published,
-        "articles_review": review,
-        "articles_blocked": blocked,
-        "total_duration_seconds": round(pipeline_duration, 2),
-        "status": "completed",
-    })
-
-    # Stage 4: Evaluate
-    if not args.skip_evaluate:
-        logger.info("--- Stage 4: Quality Evaluation ---")
-        stage_evaluate(args.date, pipeline_duration)
-
-    # Stage 5: Publish
-    stage_publish(args.date, mode, args.publish, args.skip_publish)
-
-    mins = int(pipeline_duration // 60)
-    secs = int(pipeline_duration % 60)
-    logger.info("Pipeline complete in %dm %ds", mins, secs)
-
-    if mode == "demo":
-        chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
-        ogd_records_count = getattr(config, "demo_records_count", 0)
-        db_inserted = getattr(config, "db_inserted", 0)
-        db_duplicates = getattr(config, "db_duplicates", 0)
-        avg_price = getattr(config, "demo_avg_price", 0.0)
-        gen_status = getattr(config, "demo_gen_status", "Article Generated")
-        trans_hi = "✓" if getattr(config, "demo_trans_hi_ok", False) else "✗"
-        trans_mr = "✓" if getattr(config, "demo_trans_mr_ok", False) else "✗"
-        if args.skip_publish:
-            pub_status = "SKIPPED"
-        else:
-            pub_status = "✓" if getattr(config, "demo_publish_ok", False) else "✗"
-
-        # Get data source status for nagpur demo
-        nagpur_payload = analytics_map.get("soybean_nagpur")
-        ds_status = nagpur_payload.data_source_status if nagpur_payload else getattr(config, "ingestion_data_source", "LIVE")
-
-        summary = f"""
+    summary = f"""
 OGD Fetch:
 Commodity: Soybean
 Market: {chosen_market}
@@ -639,11 +567,164 @@ Marathi {trans_mr}
 Publishing:
 GitHub Pages {pub_status} (Data Source: {ds_status})
 """
+    try:
+        print(summary)
+    except UnicodeEncodeError:
+        safe_summary = summary.replace("₹", "Rs. ").replace("✓", "OK").replace("✗", "FAIL")
+        print(safe_summary)
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Normalize target date
+    from date_utils import normalize_date, parse_date
+    try:
+        args.date = normalize_date(args.date)
+    except ValueError as e:
+        logger.error("Invalid target date: %s", e)
+        sys.exit(1)
+
+    # Evaluate-only mode
+    if args.evaluate_only:
+        from evaluate import generate_report, print_report, save_report_json
+        report = generate_report(args.date)
+        print_report(report)
+        save_report_json(report)
+        return
+
+    # Stage 0: Init
+    run_id, mode = stage_init(args)
+
+    # Load knowledge layer (once, shared across all stages)
+    import config
+    knowledge = config.load_knowledge()
+    logger.info("Knowledge loaded: %d domains", len(knowledge))
+
+    # Determine commodities to process
+    commodities = args.commodities or config.COMMODITIES
+    if mode == "demo":
+        commodities = ["soybean"]
+    logger.info("Commodities: %s", ", ".join(commodities))
+
+    # Resolve backfill dates
+    from datetime import timedelta
+    resolved_dates = []
+    target_dt = parse_date(args.date)
+    is_backfill = (args.backfill_days is not None) or (args.start_date and args.end_date)
+
+    if args.backfill_days is not None:
+        if args.backfill_days <= 0:
+            logger.error("--backfill-days must be a positive integer.")
+            sys.exit(1)
+        for i in range(args.backfill_days - 1, -1, -1):
+            d = target_dt - timedelta(days=i)
+            resolved_dates.append(d.strftime("%Y-%m-%d"))
+    elif args.start_date and args.end_date:
         try:
-            print(summary)
-        except UnicodeEncodeError:
-            safe_summary = summary.replace("₹", "Rs. ").replace("✓", "OK").replace("✗", "FAIL")
-            print(safe_summary)
+            start_dt = parse_date(args.start_date)
+            end_dt = parse_date(args.end_date)
+        except ValueError as e:
+            logger.error("Failed to parse start or end date: %s", e)
+            sys.exit(1)
+        if start_dt > end_dt:
+            logger.error("start-date must be before or equal to end-date.")
+            sys.exit(1)
+        curr_dt = start_dt
+        while curr_dt <= end_dt:
+            resolved_dates.append(curr_dt.strftime("%Y-%m-%d"))
+            curr_dt += timedelta(days=1)
+    else:
+        resolved_dates.append(target_dt.strftime("%Y-%m-%d"))
+
+    logger.info("Resolved dates for execution: %s", resolved_dates)
+
+    # We will process each date sequentially
+    for idx, current_date in enumerate(resolved_dates):
+        logger.info("=" * 55)
+        logger.info("Processing date %d/%d: %s", idx + 1, len(resolved_dates), current_date)
+        logger.info("=" * 55)
+
+        pipeline_start = time.time()
+
+        # Log pipeline run
+        from database import log_pipeline_run
+        log_pipeline_run(run_id, current_date, mode)
+
+        # Stage 1: Ingest
+        logger.info("--- Stage 1: Data Ingestion ---")
+        stage_ingest(current_date, commodities)
+
+        # Resolve Latest Available Date for demo mode after ingestion
+        if mode == "demo" and not is_backfill:
+            from database import query_latest_available_date
+            latest_date = query_latest_available_date("soybean")
+            if latest_date:
+                logger.info("Demo Mode: Overriding target date from %s to latest available date %s", current_date, latest_date)
+                current_date = latest_date
+
+        # Stage 2: Analytics
+        logger.info("--- Stage 2: Analytics Pre-Computation ---")
+        analytics_map, scope_targets = stage_analytics(current_date, knowledge)
+        config.analytics_payloads_cache = analytics_map
+
+        if not scope_targets:
+            logger.error("No scope targets built — check if market data was ingested correctly.")
+            continue
+
+        # Stage 3: Generate + Translate + Assembly
+        logger.info("--- Stage 3: Content Generation & Translation ---")
+        logger.info("Generating %d articles ...", len(scope_targets))
+
+        skip_translate = args.skip_translate
+
+        published, review, blocked = stage_generate_and_assemble(
+            current_date, run_id, analytics_map, scope_targets, knowledge, skip_translate
+        )
+
+        pipeline_duration = time.time() - pipeline_start
+
+        # Explicitly log whether the data source for this run was LIVE, MOCK, or CACHE
+        ds_status = getattr(config, "ingestion_data_source", "LIVE")
+        logger.info("[DATA SOURCE] Date: %s | Data Source: %s", current_date, ds_status)
+
+        # Update pipeline run record
+        from database import update_pipeline_run
+        total_attempted = len(scope_targets)
+        update_pipeline_run(run_id, {
+            "articles_attempted": total_attempted,
+            "articles_published": published,
+            "articles_review": review,
+            "articles_blocked": blocked,
+            "total_duration_seconds": round(pipeline_duration, 2),
+            "status": "completed",
+        })
+
+        # Stage 4: Evaluate
+        if not args.skip_evaluate:
+            logger.info("--- Stage 4: Quality Evaluation ---")
+            stage_evaluate(current_date, pipeline_duration)
+
+        # Stage 5: Publish (Only inside loop if we are NOT running backfill)
+        if not is_backfill:
+            stage_publish(current_date, mode, args.publish, args.skip_publish)
+
+        # For the final summary printing in demo mode
+        if mode == "demo" and not is_backfill:
+            print_demo_summary(analytics_map, current_date, args, pipeline_duration)
+
+    # If we ran a backfill, run a single final stage_publish at the end
+    if is_backfill:
+        latest_date = resolved_dates[-1]
+        logger.info("Backfill finished. Running single final build and publish cycle for latest date: %s", latest_date)
+        stage_publish(latest_date, mode, args.publish, args.skip_publish)
+
+    if not is_backfill:
+        mins = int(pipeline_duration // 60)
+        secs = int(pipeline_duration % 60)
+        logger.info("Pipeline complete in %dm %ds", mins, secs)
+    else:
+        logger.info("Backfill run complete.")
 
 
 if __name__ == "__main__":

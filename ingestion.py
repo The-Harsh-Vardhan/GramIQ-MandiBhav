@@ -23,6 +23,7 @@ from config import (
 )
 from schemas import MarketRecord
 from database import insert_market_records
+from date_utils import normalize_date, parse_date
 
 logger = logging.getLogger("mandibhav.ingestion")
 
@@ -110,8 +111,9 @@ class MockProvider(DataProvider):
 
     def fetch_previous_day_data(self, date: str, commodity: str) -> list[MarketRecord]:
         # Compute the previous date from the requested date
-        from datetime import date as date_cls, timedelta
-        prev_date = (date_cls.fromisoformat(date) - timedelta(days=1)).isoformat()
+        date = normalize_date(date)
+        from datetime import timedelta
+        prev_date = (parse_date(date) - timedelta(days=1)).strftime("%Y-%m-%d")
         csv_path = self.mock_dir / f"{commodity}_previous_day.csv"
         return self._load_csv(csv_path, override_date=prev_date)
 
@@ -155,7 +157,7 @@ class LiveProvider(DataProvider):
             "User-Agent": "GramIQ-MandiBhav/1.0.0 (https://gramiq.ai; contact@gramiq.ai)"
         }
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=15)
+            response = requests.get(url, params=params, headers=headers, timeout=(config.OGD_CONNECT_TIMEOUT, config.OGD_READ_TIMEOUT))
             if response.status_code == 200:
                 data = response.json()
                 records = data.get("records", [])
@@ -242,7 +244,7 @@ class LiveProvider(DataProvider):
         headers = {
             "User-Agent": "GramIQ-MandiBhav/1.0.0 (https://gramiq.ai; contact@gramiq.ai)"
         }
-        timeout_val = 15
+        timeout_val = (config.OGD_CONNECT_TIMEOUT, config.OGD_READ_TIMEOUT)
 
         # Detailed Logging before request: Endpoint, Resource ID, Commodity, Date, Limit, Timeout
         logger.info(
@@ -252,8 +254,8 @@ class LiveProvider(DataProvider):
             "  Commodity: %s\n"
             "  Date: %s (OGD=%s)\n"
             "  Limit: %d\n"
-            "  Timeout: %ds",
-            self.endpoint, self.resource_id, commodity_filter, date, ogd_date, limit, timeout_val
+            "  Timeout: %s",
+            self.endpoint, self.resource_id, commodity_filter, date, ogd_date, limit, str(timeout_val)
         )
 
         if DEBUG_INGESTION:
@@ -467,6 +469,7 @@ class LiveProvider(DataProvider):
         return records
 
     def fetch_market_data(self, date: str, commodity: str, limit: Optional[int] = None) -> list[MarketRecord]:
+        date = normalize_date(date)
         config.ingestion_data_source = "LIVE"
         commodity_key = commodity.lower()
         filter_values = OGD_COMMODITY_FILTERS.get(commodity_key, [commodity.title()])
@@ -608,8 +611,9 @@ class LiveProvider(DataProvider):
         return self._parse_ogd_records(all_raw, date, commodity)
 
     def fetch_previous_day_data(self, date: str, commodity: str) -> list[MarketRecord]:
-        from datetime import date as date_cls, timedelta
-        prev_date = (date_cls.fromisoformat(date) - timedelta(days=1)).isoformat()
+        from datetime import timedelta
+        norm_date = normalize_date(date)
+        prev_date = (parse_date(norm_date) - timedelta(days=1)).strftime("%Y-%m-%d")
         return self.fetch_market_data(prev_date, commodity)
 
 
@@ -675,7 +679,7 @@ def test_connection() -> dict:
 
     t_start = time.time()
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response = requests.get(url, params=params, headers=headers, timeout=(config.OGD_CONNECT_TIMEOUT, config.OGD_READ_TIMEOUT))
         elapsed = time.time() - t_start
         status_code = response.status_code
 
@@ -723,9 +727,39 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
     2. Store in SQLite (deduplication via ON CONFLICT IGNORE)
     3. Return records for downstream analytics
     """
-    logger.info("Ingesting %s data for %s ...", commodity, date)
+    norm_date = normalize_date(date)
+    logger.info("Ingesting %s data for %s ...", commodity, norm_date)
 
-    records: list[MarketRecord] = []
+    import database
+    db_records = database.query_market_data(commodity, norm_date)
+    if db_records:
+        logger.info("Database cache hit for %s on %s. Skipping OGD API query.", commodity, norm_date)
+        config.ingestion_data_source = "CACHE"
+        records = []
+        for r in db_records:
+            try:
+                records.append(
+                    MarketRecord(
+                        state=r["state"],
+                        district=r.get("district", ""),
+                        market=r["market_name"],
+                        commodity=r["commodity_slug"],
+                        variety=r.get("variety", ""),
+                        grade=r.get("grade", ""),
+                        min_price=r["min_price"],
+                        max_price=r["max_price"],
+                        modal_price=r["modal_price"],
+                        arrival_tonnes=r["arrival_tonnes"],
+                        date=r["market_date"]
+                    )
+                )
+            except Exception as e:
+                logger.warning("Failed to parse DB record as MarketRecord: %s | Error: %s", r, e)
+        if records:
+            config.demo_records_count = len(records)
+            return records
+
+    records = []
     actual_provider = provider
 
     try:
