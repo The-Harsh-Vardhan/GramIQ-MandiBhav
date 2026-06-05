@@ -79,6 +79,14 @@ mandibhav.db-wal
 output/
 site/
 
+# Next.js / Vercel
+.next/
+node_modules/
+.vercel/
+web/.next/
+web/node_modules/
+web/.vercel/
+
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
 

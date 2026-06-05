@@ -58,6 +58,7 @@ OUTPUT_DIR = ROOT_DIR / "output"
 DB_PATH = ROOT_DIR / "mandibhav.db"
 SITE_DIR = ROOT_DIR / "site"
 SITE_TEMPLATES_DIR = TEMPLATES_DIR / "site"
+WEB_DIR = ROOT_DIR / "web"
 
 # ---------------------------------------------------------------------------
 # Static site generation settings
@@ -73,6 +74,7 @@ SITE_DESCRIPTION: str = (
     "Daily soybean and cotton mandi price reports in English, Hindi, "
     "Marathi and Gujarati — powered by government data and AI."
 )
+PUBLIC_SITE_URL: str = os.environ.get("PUBLIC_SITE_URL", "https://mandibhav.gramiq.com").rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +92,16 @@ analytics_payloads_cache: dict = {}
 
 OGD_API_KEY: str = os.environ.get("OGD_API_KEY", "")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+DATA_BACKEND: str = os.environ.get("DATA_BACKEND", "sqlite").strip().lower()
+PUBLISHING_TARGET: str = os.environ.get("PUBLISHING_TARGET", "vercel").strip().lower()
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY: str = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_REQUEST_TIMEOUT: int = int(os.environ.get("SUPABASE_REQUEST_TIMEOUT", "30"))
+WRITE_ARTICLE_ARTIFACTS: bool = os.environ.get(
+    "WRITE_ARTICLE_ARTIFACTS",
+    "false" if (DATA_BACKEND == "supabase" and PUBLISHING_TARGET == "vercel") else "true",
+).lower() == "true"
 
 # OGD (data.gov.in) API endpoint for daily mandi prices
 OGD_API_BASE_URL: str = "https://api.data.gov.in/resource"

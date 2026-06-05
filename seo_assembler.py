@@ -901,6 +901,14 @@ def write_article_file(
     Blocked articles go to output/{date}/blocked/{scope_key}_{language}.json
     Review articles go to output/{date}/review/{scope_key}_{language}.json
     """
+    if not config.WRITE_ARTICLE_ARTIFACTS:
+        logger.debug(
+            "Article artifact writing disabled; skipping file output for %s/%s",
+            final_article.scope_key,
+            final_article.language,
+        )
+        return output_dir / final_article.date / final_article.scope_key / f"{final_article.language}.json"
+
     date = final_article.date
     lang = final_article.language
     scope = final_article.scope_key

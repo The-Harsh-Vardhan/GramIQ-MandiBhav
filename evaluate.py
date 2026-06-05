@@ -19,6 +19,7 @@ from typing import Optional
 
 import config
 from config import OUTPUT_DIR, MIN_WORD_COUNT, MAX_WORD_COUNT, CTA_FOOTER_HTML
+from repository import ArticleRepository
 
 logger = logging.getLogger("mandibhav.evaluate")
 
@@ -148,15 +149,7 @@ def _validate_json_ld(json_ld: dict, required_type: str) -> bool:
     return True
 
 
-def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
-    """Load and evaluate a single article JSON file."""
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        logger.warning("Could not read %s: %s", file_path, e)
-        return None
-
+def _evaluate_article_payload(data: dict, source_label: str) -> ArticleMetrics:
     body = data.get("body", "")
     title = data.get("title", "")
     meta = data.get("meta_description", "")
@@ -184,7 +177,7 @@ def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
     classification_accuracy = 1.0 if classification_ok else 0.0
 
     return ArticleMetrics(
-        file=str(file_path),
+        file=source_label,
         language=data.get("language", "?"),
         scope_key=data.get("scope_key", "?"),
         article_type=data.get("article_type", "?"),
@@ -224,6 +217,47 @@ def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
     )
 
 
+def _evaluate_article(file_path: Path) -> Optional[ArticleMetrics]:
+    """Load and evaluate a single article JSON file."""
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning("Could not read %s: %s", file_path, e)
+        return None
+    return _evaluate_article_payload(data, str(file_path))
+
+
+def _article_record_to_payload(record: dict) -> dict:
+    return {
+        "title": record.get("title", ""),
+        "body": record.get("body_html", ""),
+        "meta_description": record.get("meta_description", ""),
+        "keywords": record.get("keywords", []),
+        "language": record.get("language", "en"),
+        "scope_key": record.get("scope_key", ""),
+        "article_type": record.get("article_type", ""),
+        "commodity": record.get("commodity_slug", ""),
+        "confidence_score": record.get("credibility_score", 0.0),
+        "publish_status": record.get("publish_status", "draft"),
+        "json_ld": record.get("json_ld", {}),
+        "faq_json_ld": record.get("faq_json_ld", {}),
+        "faqs": record.get("faqs", []),
+        "unsupported_claims_count": record.get("unsupported_claims_count", 0),
+        "contradictions_count": record.get("contradictions_count", 0),
+        "scope_violations_count": record.get("scope_violations_count", 0),
+        "fallback_disclosure_present": record.get("fallback_disclosure_present", True),
+        "data_source_disclosure_present": record.get("data_source_disclosure_present", True),
+        "truthfulness_score": record.get("truthfulness_score", 1.0),
+        "record_count": record.get("records_analyzed", 0),
+        "unique_markets_count": record.get("unique_markets_count", 0),
+        "unique_varieties_count": record.get("unique_varieties_count", 0),
+        "unique_grades_count": record.get("unique_grades_count", 0),
+        "report_type": record.get("report_type", "PRICE_SNAPSHOT"),
+        "data_source_status": record.get("data_source", "LIVE"),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Report aggregation
 # ---------------------------------------------------------------------------
@@ -234,28 +268,41 @@ def _pct(count: int, total: int) -> float:
 
 def generate_report(date: str, output_dir: Path = OUTPUT_DIR) -> EvaluationReport:
     """
-    Scan all JSON article files under output/{date} and produce an EvaluationReport.
+    Scan local JSON article files or canonical stored articles and produce an EvaluationReport.
     """
-    date_dir = output_dir / date
     report = EvaluationReport(date=date)
 
-    if not date_dir.exists():
-        report.errors.append(f"Output directory does not exist: {date_dir}")
-        return report
-
-    # Scan all JSON files (published + review), excluding the quality report itself
-    all_json_files = [f for f in date_dir.rglob("*.json") if f.name != "quality_report.json"]
-    report.total_files_scanned = len(all_json_files)
-
-    if not all_json_files:
-        report.warnings.append("No JSON files found in output directory.")
-        return report
-
     metrics_list: list[ArticleMetrics] = []
-    for file_path in all_json_files:
-        m = _evaluate_article(file_path)
-        if m:
-            metrics_list.append(m)
+    if config.DATA_BACKEND == "supabase" and not config.WRITE_ARTICLE_ARTIFACTS:
+        records = ArticleRepository().list_articles_by_date(date, language=None)
+        report.total_files_scanned = len(records)
+        if not records:
+            report.warnings.append("No articles found in repository for the requested date.")
+            return report
+        for record in records:
+            metrics_list.append(
+                _evaluate_article_payload(
+                    _article_record_to_payload(record),
+                    f"repository:{record.get('slug', record.get('id', '?'))}",
+                )
+            )
+    else:
+        date_dir = output_dir / date
+        if not date_dir.exists():
+            report.errors.append(f"Output directory does not exist: {date_dir}")
+            return report
+
+        all_json_files = [f for f in date_dir.rglob("*.json") if f.name != "quality_report.json"]
+        report.total_files_scanned = len(all_json_files)
+
+        if not all_json_files:
+            report.warnings.append("No JSON files found in output directory.")
+            return report
+
+        for file_path in all_json_files:
+            m = _evaluate_article(file_path)
+            if m:
+                metrics_list.append(m)
 
     if not metrics_list:
         return report

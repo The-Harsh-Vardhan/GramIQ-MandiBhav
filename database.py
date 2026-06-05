@@ -16,6 +16,7 @@ from datetime import date as date_type
 from config import DB_PATH
 from schemas import MarketRecord
 from date_utils import normalize_date
+import supabase_backend
 
 logger = logging.getLogger("mandibhav.database")
 
@@ -47,6 +48,9 @@ def get_connection():
 
 def init_db() -> None:
     """Create all tables if they don't exist. Safe to call multiple times."""
+    if supabase_backend.enabled():
+        logger.info("Supabase backend enabled; skipping local SQLite initialization.")
+        return
     with get_connection() as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS market_data (
@@ -122,6 +126,14 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
     Insert market records. Checks for duplicates and records skipped records.
     Returns the count of newly inserted rows.
     """
+    if supabase_backend.enabled():
+        inserted = supabase_backend.insert_market_records(records, source=source)
+        import config
+        config.db_inserted = inserted
+        config.db_duplicates = 0
+        logger.info("Supabase market_data upserted: %d", inserted)
+        return inserted
+
     inserted = 0
     skipped_dupes = 0
     other_errors = 0
@@ -196,6 +208,8 @@ def insert_market_records(records: list[MarketRecord], source: str = "mock") -> 
 
 def query_market_data(commodity: str, market_date: str) -> list[dict]:
     """Fetch all market records for a given commodity and date."""
+    if supabase_backend.enabled():
+        return supabase_backend.query_market_data(commodity, market_date)
     market_date = normalize_date(market_date)
     sql = """
         SELECT * FROM market_data
@@ -212,6 +226,8 @@ def query_previous_day_data(commodity: str, market_date: str) -> list[dict]:
     Fetch market records for the day before market_date.
     Uses SQLite date arithmetic to find the previous date.
     """
+    if supabase_backend.enabled():
+        return supabase_backend.query_previous_day_data(commodity, market_date)
     market_date = normalize_date(market_date)
     logger.info("Fetching previous-day data for comparison analytics")
     sql = """
@@ -227,6 +243,8 @@ def query_previous_day_data(commodity: str, market_date: str) -> list[dict]:
 
 def query_latest_available_date(commodity: str) -> Optional[str]:
     """Query the database to find the latest date for which records have been ingested."""
+    if supabase_backend.enabled():
+        return supabase_backend.query_latest_available_date(commodity)
     sql = """
         SELECT MAX(market_date) as latest_date FROM market_data
         WHERE commodity_slug = ?
@@ -247,6 +265,9 @@ def insert_article(article_data: dict) -> bool:
     Insert a single article. Returns True if inserted, False if duplicate.
     article_data should match the articles table columns.
     """
+    if supabase_backend.enabled():
+        supabase_backend.upsert_article(article_data)
+        return True
     if "article_date" in article_data:
         article_data["article_date"] = normalize_date(article_data["article_date"])
     sql = """
@@ -266,16 +287,27 @@ def insert_article(article_data: dict) -> bool:
         return cursor.rowcount > 0
 
 
-def query_articles_by_date(article_date: str, language: str = "en") -> list[dict]:
+def query_articles_by_date(article_date: str, language: Optional[str] = "en") -> list[dict]:
     """Fetch all articles for a given date and language."""
+    if supabase_backend.enabled():
+        return supabase_backend.query_articles_by_date(article_date, language)
     article_date = normalize_date(article_date)
-    sql = """
-        SELECT * FROM articles
-        WHERE article_date = ? AND language = ?
-        ORDER BY article_type, scope_key
-    """
+    if language:
+        sql = """
+            SELECT * FROM articles
+            WHERE article_date = ? AND language = ?
+            ORDER BY article_type, scope_key
+        """
+        params = (article_date, language)
+    else:
+        sql = """
+            SELECT * FROM articles
+            WHERE article_date = ?
+            ORDER BY article_type, scope_key
+        """
+        params = (article_date,)
     with get_connection() as conn:
-        rows = conn.execute(sql, (article_date, language)).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -285,6 +317,9 @@ def query_articles_by_date(article_date: str, language: str = "en") -> list[dict
 
 def log_pipeline_run(run_id: str, run_date: str, mode: str) -> None:
     """Create a pipeline run record at the start of execution."""
+    if supabase_backend.enabled():
+        supabase_backend.log_pipeline_run(run_id, run_date, mode)
+        return
     run_date = normalize_date(run_date)
     sql = """
         INSERT OR IGNORE INTO pipeline_runs (run_id, run_date, mode)
@@ -296,6 +331,9 @@ def log_pipeline_run(run_id: str, run_date: str, mode: str) -> None:
 
 def update_pipeline_run(run_id: str, metrics: dict) -> None:
     """Update a pipeline run record with final metrics."""
+    if supabase_backend.enabled():
+        supabase_backend.update_pipeline_run(run_id, metrics)
+        return
     sql = """
         UPDATE pipeline_runs
         SET articles_attempted = :articles_attempted,

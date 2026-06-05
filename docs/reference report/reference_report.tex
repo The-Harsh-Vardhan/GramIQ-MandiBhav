@@ -1,0 +1,330 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{hyperref}
+\usepackage{svg}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage[all]{hypcap}
+\usetikzlibrary{arrows.meta, positioning}
+
+\begin{document}
+
+\title{HNDSR: A Hybrid Neural Operator--Diffusion Model for Continuous-Scale Satellite Image Super-Resolution}
+
+\author{
+\IEEEauthorblockN{
+Adil Khan\textsuperscript{1}, 
+Rakshit Modanwal\textsuperscript{2}, 
+Harsh Vardhan\textsuperscript{3}, 
+Piyush Jain\textsuperscript{4}, 
+and Yash Vikram\textsuperscript{5}
+}
+\IEEEauthorblockA{
+Department of Computer Science and Engineering, \\
+Indian Institute of Information Technology, Nagpur, Maharashtra, India \\
+Emails: \{akhan, bt23csd062, bt23csd041, bt23csd067, bt23csd031\}@iiitn.ac.in
+}
+
+% \vspace{0.1cm}
+% \IEEEauthorblockA{
+% ORCID: \\
+% Harsh Vardhan: \underline{\hspace{3cm}} \quad
+% Piyush Jain: \underline{\hspace{3cm}} \\
+% Rakshit Modanwal: \underline{\hspace{3cm}} \quad
+% Yash Vikram: \underline{\hspace{3cm}}
+% }
+}
+
+\maketitle
+
+\begin{abstract}
+Super-resolution (SR) satellite imagery remains a major problem in remote sensing, necessitating both scale flexibility and high perceptual accuracy.  This research introduces a novel hybrid model, \textbf{HNDSR} (Hybrid Neural Operator--Diffusion Super-Resolution), that combines a continuous functional prior learnt using a neural operator with a latent diffusion network to reconstruct high-resolution satellite pictures.  The neural operator module converts low-resolution inputs into resolution-agnostic feature maps that preserve spatial structure, and the diffusion model uses these priors and scale conditions to produce texture-rich, structurally coherent outputs.  Training uses paired low- and high-resolution photos from the open-access \textit{4$\times$ Satellite Image Super-Resolution} dataset on Kaggle~\cite{tudela2023dataset}.  To balance realism and fidelity, the optimisation takes into account denoising diffusion, content, and perceptual losses. Experimental results show that HNDSR outperforms contemporary continuous-scale SR techniques in terms of PSNR, SSIM, and LPIPS ~\cite{neurOpDiff, e2diffsr}.  The proposed hybrid framework is an effective approach for improving remote sensing images on a continuous scale and with excellent quality.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Satellite image super-resolution, neural operator, diffusion model, continuous scale, remote sensing, Kaggle dataset.
+\end{IEEEkeywords}
+
+
+%----------------- Start Introduction --------------------
+\section{Introduction}
+High-resolution satellite imagery is critical in current remote sensing applications such as environmental monitoring, precision agriculture, catastrophe assessment, and city planning.  These applications rely largely on spatially detailed images for precise feature extraction, object detection, and semantic segmentation.  However, many satellite sensors' geographic resolution is limited by technology limits, atmospheric disturbances, and data transmission capacity.  As a result, the low-resolution (LR) imagery frequently lacks precise structural and textural features needed for essential geospatial analysis.  Reconstructing high-resolution (HR) images from low-resolution (LR) inputs, also known as image super-resolution (SR), is still a major issue in remote sensing ~\cite{ledig2017photo, lim2017enhanced}.
+
+Early SR approaches based on interpolation or optimisation made little progress due to their inability to capture complicated high-frequency information~\cite{dong2015image}.  Convolutional Neural Networks (CNNs) like EDSR~\cite{lim2017enhanced} and RCAN~\cite{zhang2018image} have increased reconstruction fidelity by learning end-to-end mappings between LR and HR image domains.  Despite their popularity, CNN-based SR algorithms frequently yield overly smoothed outputs and are limited to preset integer upscaling factors, which reduces flexibility for multi-sensor settings.  Generative Adversarial Networks (GANs), such as SRGAN~\cite{ledig2017photo} and ESRGAN~\cite{wang2018esrgan}, improve perceptual realism by introducing adversarial objectives. However, when applied to various remote-sensing scenes, GANs frequently introduce unstable training dynamics and perceptual artefacts.
+
+The \textit{SR3} model (Image Super-Resolution via Iterative Refinement)~\cite{saharia2022image} marked a significant advancement in generative SR.  SR3 reframed the SR problem as a conditional denoising diffusion process, in which an HR image is gradually created from pure Gaussian noise conditioned on its LR counterpart.  This diffusion-based formulation allowed SR3 to attain exceptional perceptual quality and photorealism, outperforming earlier CNN and GAN-based models.  Its iterative refinement method proved resilient in recovering fine picture details, establishing diffusion models as a new standard for SR tasks ~\cite{rombach2022high, ho2020denoising}.
+
+Nonetheless, SR3 and its derivatives have practical limits when used for large-scale remote sensing imaging.  First, their iterative inference technique involves hundreds of denoising steps, which results in high computational delay and memory consumption~\cite{saharia2022image}.  Second, while SR3 is good at creating visually appealing textures, it may sacrifice global spatial consistency, especially in complex satellite settings with recurring patterns or uneven geometries.  Diffusion-based SR models, such as SR3, are typically trained for discrete integer scale factors (e.g., $\times4$), which limits their generalisation to arbitrary or continuous-scale upscaling commonly found in multi-sensor satellite systems.
+
+To address these constraints, we offer a unique hybrid framework, entitled \textbf{HNDSR} (Hybrid Neural Operator--Diffusion Super-Resolution), which combines the perceptual strength of diffusion models with the continuous-scale generalisation of Neural Operators.  The suggested architecture maintains SR3's high-quality texture creation while introducing structural adaptability and computational economy via three fundamental contributions:
+\begin{itemize}
+    \item \textbf{Neural Operator Prior:}  A Neural Operator module that learns a continuous mapping from LR inputs to scale-invariant latent representations, allowing for flexible, non-integer upscaling.
+     \item \textbf {Latent Diffusion Backbone:}  A conditioned latent diffusion model that reconstructs high-frequency textures and fine features with fewer denoising repetitions, resulting in faster inference.
+     \item \textbf{The Joint Optimisation Strategy:}  A unified training strategy that uses diffusion, perceptual, and content losses to balance texture realism, structural coherence, and efficiency.
+ \end{itemize}
+
+The proposed HNDSR framework is trained and verified using matched LR-HR satellite imagery from the publicly accessible \textit{4$\times$ Satellite Image Super-Resolution} dataset on Kaggle~\cite{tudela2023dataset}.  HNDSR outperforms diffusion-based SR approaches in terms of perceptual quality, scale continuity, and processing cost, making it a viable option for real-world remote sensing.
+
+%------------ Start Related Work -----------------
+\section{Related Work}
+
+Super-resolution (SR) in remote sensing has undergone a paradigm shift from early convolutional models to modern generative and operator-based approaches. This section reviews key developments in deep learning-based SR, diffusion-based methods, and neural operator frameworks that inspire the proposed HNDSR model.
+
+\subsection{CNN- and GAN-based Super-Resolution}
+
+Early learning-based SR relied on convolutional neural networks (CNNs) to learn deterministic mappings from low-resolution (LR) to high-resolution (HR) domains. Classical models such as SRCNN~\cite{dong2015image}, EDSR~\cite{lim2017enhanced}, and RCAN~\cite{zhang2018image} demonstrated significant gains in peak signal-to-noise ratio (PSNR) by exploiting residual learning and channel attention. However, these regression-driven methods optimized primarily for pixel-wise losses (L1 or L2), producing oversmoothed textures and poor perceptual realism, especially in satellite images with complex textures and terrain variability.
+
+To enhance perceptual quality, generative adversarial networks (GANs) introduced adversarial and perceptual objectives. SRGAN~\cite{ledig2017photo} and ESRGAN~\cite{wang2018esrgan} synthesized sharper and more natural textures through adversarial loss and VGG-based perceptual constraints~\cite{johnson2016perceptual}. Yet, GAN-based models are notoriously unstable due to mode collapse and gradient imbalance~\cite{arjovsky2017towards}, frequently generating artifacts and inconsistent spatial structures in large-scale remote sensing scenes. These challenges motivated the exploration of probabilistic diffusion models~\cite{ho2020denoising}, which offer both training stability and improved fidelity.
+
+\subsection{Diffusion-based Super-Resolution}
+
+Image production is redefined as a Markovian denoising process using diffusion probabilistic models (DPMs)~\cite{sohl2015deep, ho2020denoising}, where a model learns to reverse Gaussian noise corruption to iteratively recreate an image.  By creating HR pictures from noisy priors conditioned on LR inputs, SR3~\cite{saharia2022image} invented conditional denoising diffusion for SR.  SR3's sampling procedure, which required hundreds of repetitions, resulted in substantial inference latency and processing expense despite achieving state-of-the-art perceptual quality.  Furthermore, the versatility of SR3 and its derivatives in multi-resolution satellite applications is limited to fixed integer scale factors.
+
+Wu et al. suggested E\textsuperscript{2}DiffSR~\cite{e2diffsr}, an effective and elastic latent diffusion model designed for continuous-scale remote sensing SR, to overcome these inefficiencies.  E\textsuperscript{2}DiffSR functions in a small latent space that solely encodes the differential prior between LR and HR pictures, in contrast to pixel-space diffusion.  By concentrating only on high-frequency data, this "differential prior encoding" minimises redundancy and processing overhead~\cite{e2diffsr}. 
+ To restore HR features at any scale, its architecture combines a continuous-scale upsampling module (CSUM)~\cite{wang2023csum} with a differential prior encoder-decoder.  Additionally, while preserving coherence with LR inputs, a feature refinement unit (FRU) stack~\cite{li2022fru} improves textural recovery. 
+Consequently, compared to GAN-based and traditional diffusion models, E\textsuperscript{2}DiffSR achieves near real-time inference speeds with improved perceptual fidelity. 
+ Nevertheless, despite its effectiveness, the diffusion process of E\textsuperscript{2}DiffSR is still limited by discrete training scales and is unable to generalise to arbitrary, non-integer magnifications.
+
+\subsection{Continuous-Scale Super-Resolution via Neural Operators}
+
+To achieve scale-continuous SR, recent work has explored implicit neural representations (INRs)~\cite{sitzmann2020implicit} and functional operator learning~\cite{li2020fourier}. Neural operators (NOs) map between infinite-dimensional function spaces rather than discrete pixel grids, enabling dynamic adaptation to arbitrary resolutions. Xu \textit{et al.} introduced NeurOp-Diff~\cite{neurOpDiff}, a neural operator–guided diffusion framework that combines the global functional learning capability of neural operators with the generative strength of diffusion models.
+
+In NeurOp-Diff, LR remote sensing images are first processed by a neural operator equipped with a Galerkin-type attention mechanism~\cite{kovachki2021neural} that learns continuous basis representations in latent function space. These continuous priors are used to guide a conditional diffusion model during denoising, allowing the network to generate HR outputs across varying magnification scales. Unlike previous bicubic-based priors~\cite{dong2015image}, neural operators capture rich high-frequency cues directly from the LR input~\cite{li2020fourier}, yielding sharper and more realistic details. Experiments on multiple datasets (UCMerced~\cite{yang2010ucmerced}, AID~\cite{xia2017aid}, and RSSCN7~\cite{zou2015rsscn7}) confirmed NeurOp-Diff’s advantage in generating fine textures without over-smoothing, particularly under large scaling factors.
+
+Nevertheless, NeurOp-Diff operates entirely in pixel space, which incurs high computational costs during iterative sampling. Its reliance on full-resolution denoising limits efficiency and scalability for large satellite imagery, motivating hybrid approaches that combine neural operator flexibility with latent diffusion efficiency.
+
+\subsection{Motivation and Hybridization}
+
+E\textsuperscript{2}DiffSR~\cite{e2diffsr} and NeurOp-Diff~\cite{neurOpDiff} are significant contributions to diffusion-based SR, but they focus on orthogonal elements of the problem.  E\textsuperscript{2}DiffSR excels in computing efficiency and latent-space modelling, but lacks the capacity to adapt to continuous scales.  NeurOp-Diff provides continuous-scale priors using neural operators, but it is computationally expensive due to pixel-level diffusion.  The suggested \textbf{HNDSR} (Hybrid Neural Operator-Diffusion Super-Resolution) combines both of these concepts through architectural hybridisation.
+
+HNDSR uses a neural operator prior~\cite{li2020fourier, kovachki2021neural} to learn continuous, scale-invariant latent representations from LR inputs.  This prior captures long-range relationships and structural continuity across scales, operating as a continuous mapping $N_{\phi}: \mathbb{R}^{H\times W} \rightarrow \mathcal{F}(\Omega)$, where $\mathcal{F}(\Omega)$ is a function space over spatial coordinates.  The latent diffusion backbone $D_{\theta}$ then executes denoising in this compact feature domain, reconstructing high-frequency textures efficiently~\cite{rombach2022high}.  By conditioning diffusion on neural operator embeddings~\cite{rombach2022high}, HNDSR achieves both scale-continuous adaptability and high perceptual realism, outperforming pixel-space diffusion and discrete-scale latent SR.
+
+%------------ End Related Work ---------------------
+
+
+%--------------- Start Methodology ------------
+\section{Methodology}
+
+To improve satellite image reconstruction, the suggested hybrid super-resolution (SR) model combines probabilistic refinement with deterministic feature encoding.  Three consecutive stages make up our architecture, which we call \textbf{HNDSR} (Hybrid Neural-Diffusion Super-Resolution): autoencoder-based latent encoding, neural operator mapping, and diffusion-based refinement.
+
+%----------- Start Stage - 1 Autoencoder --------------------
+\subsection{Stage 1: Autoencoder Residual Learning}
+In the first step, a convolutional autoencoder $E_{\theta}$-$D_{\phi}$ reconstructs the high-resolution (HR) picture structure and low-frequency features, as demonstrated in Fig.~\ref{fig:Overall architecture of the proposed HNDSR framework.}. 
+ Given an HR input picture $I_{HR}$, the autoencoder minimises pixel-level loss:
+
+\begin{equation}
+\hat{I}_{HR} = D_{\phi}(E_{\theta}(I_{HR})),
+\end{equation}
+
+\begin{equation}
+\mathcal{L}_{AE} = \|I_{HR} - \hat{I}_{HR}\|_1,
+\end{equation}
+
+where $\mathcal{L}_{AE}$ enforces accurate structural reconstruction using L1 loss, ensuring sharp edge preservation \cite{lim2017enhanced, ledig2017photo}. This stage acts as a feature extractor, providing latent representations $z_{HR} = E_{\theta}(I_{HR})$.
+%----------- End Stage - 1 Autoencoder --------------------
+
+
+%----------- Start Stage - 2 Neural Operator --------------------
+\subsection{Stage 2: Neural Operator-Based Latent Mapping}
+The second stage introduces a Neural Operator (NO) inspired by the Fourier Neural Operator framework \cite{li2020fourier}, which learns a continuous-scale mapping from low-resolution (LR) inputs to high-resolution latent features, as illustrated in Fig.~\ref{fig:Overall architecture of the proposed HNDSR framework.}. 
+Given an LR image $I_{LR}$ and scale factor $s$, the mapping is defined as:
+
+\begin{equation}
+\hat{z}_{NO} = \mathcal{N}_{\psi}(I_{LR}, s),
+\end{equation}
+
+where $\mathcal{N}_{\psi}$ captures long-range dependencies using frequency-domain transformations. The objective is to minimize the discrepancy between $\hat{z}_{NO}$ and the true HR latent code $z_{HR}$ obtained from Stage~1:
+
+\begin{equation}
+\mathcal{L}_{NO} = \|z_{HR} - \hat{z}_{NO}\|_2^2.
+\end{equation}
+
+This stage serves as a deterministic bridge that projects low-resolution representations into a learned high-dimensional latent space.
+%----------- End Stage - 2 Neural Operator --------------------
+
+
+%---------- Start Stage 2 Image ----------------
+\begin{figure*}
+    \centering
+    \includegraphics[width=\textwidth]{Images/fig-01_final.pdf}
+    \caption{Stage 1 and Stage 2 of the proposed HNDSR framework.
+Stage 1 performs Autoencoder Residual Learning to reconstruct the structural features of the high-resolution image.
+Stage 2 applies a Neural Operator–based Latent Mapping that transforms low-resolution inputs through bicubic upsampling and continuous feature mapping to produce high-resolution latent representations.}
+    \label{fig:Overall architecture of the proposed HNDSR framework.}
+\end{figure*}
+%----------- End Stage 2 Image -----------------
+
+%---------- Start Stage 3 Diffusion-Based Probabilistic Refinement ----------------
+\subsection{Stage 3: Diffusion-Based Probabilistic Refinement}
+The final stage employs a Denoising Diffusion Probabilistic Model (DDPM) \cite{ho2020denoising, saharia2022image, rombach2022high} 
+to introduce stochastic refinement and generate fine textures typically lost in pixel-level reconstruction, 
+as illustrated in Fig.~\ref{fig:Diffusion Process}. 
+The diffusion process progressively corrupts a latent variable $x_0$ (obtained from $\hat{z}_{NO}$) into a noisy sample $x_t$ through:
+
+\begin{equation}
+q(x_t | x_{t-1}) = \mathcal{N}\big(\sqrt{1 - \beta_t} x_{t-1}, \beta_t \mathbf{I}\big),
+\end{equation}
+
+where $\beta_t$ controls the noise variance at each timestep $t$. 
+The reverse process is modeled by a U-Net conditioned on the neural operator’s context $c$~\cite{ho2020denoising}.
+
+\begin{equation}
+\varepsilon_{\theta}(x_t, t, c) \approx \varepsilon, \quad
+\mathcal{L}_{Diff} = \mathbb{E}\big[\|\varepsilon - \varepsilon_{\theta}(x_t, t, c)\|_2^2\big].
+\end{equation}
+
+This probabilistic denoising process refines texture, illumination, and fine-grained features while maintaining global consistency.
+
+\subsection{Overall Objective Function}
+The total training loss combines all stages in a multi-term optimization:
+
+\begin{equation}
+\mathcal{L}_{total} = \mathcal{L}_{AE} + \lambda_1 \mathcal{L}_{NO} + \lambda_2 \mathcal{L}_{Diff},
+\end{equation}
+
+where $\lambda_1$ and $\lambda_2$ control the contribution of latent mapping and diffusion refinement, respectively. 
+The model is optimized using AdamW with cosine annealing learning rate scheduling.
+%---------- End Stage 3 Diffusion-Based Probabilistic Refinement ----------------
+
+
+\subsection{Evaluation Metrics}
+To assess reconstruction fidelity, three quantitative metrics are used: Peak Signal-to-Noise Ratio (PSNR), Structural Similarity Index (SSIM), and Learned Perceptual Image Patch Similarity (LPIPS).
+
+\begin{equation}
+\text{PSNR} = 10 \log_{10} \left( \frac{MAX_I^2}{\text{MSE}(I_{HR}, \hat{I}_{HR})} \right),
+\end{equation}
+
+\begin{equation}
+\text{SSIM}(I_{HR}, \hat{I}_{HR}) = \frac{(2\mu_x\mu_y + c_1)(2\sigma_{xy} + c_2)}{(\mu_x^2 + \mu_y^2 + c_1)(\sigma_x^2 + \sigma_y^2 + c_2)}.
+\end{equation}
+
+The \textbf{LPIPS} metric \cite{zhang2018unreasonable} evaluates perceptual similarity by comparing deep feature embeddings from a pre-trained network $\phi$ (e.g., VGG). It is defined as:
+
+\begin{equation}
+\text{LPIPS}(I_{HR}, \hat{I}_{HR}) = \sum{l} w_l \| \phi_l(I_{HR}) - \phi_l(\hat{I}_{HR}) \|_2^2,
+\end{equation}
+
+where $\phi_l(\cdot)$ denotes the activation at layer $l$, and $w_l$ are learned weights capturing perceptual sensitivity. Lower LPIPS values indicate higher perceptual quality.
+
+These metrics jointly measure both numerical accuracy (PSNR, SSIM) and human perceptual fidelity (LPIPS) of the reconstructed satellite images 
+\cite{johnson2016perceptual, zhang2018unreasonable}.
+%--------------- End Methodology ------------
+%---------- Start Stage 3 Image ----------------
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{Images/fig-02_final.pdf}
+    \caption{Diffusion training and inference workflow in HNDSR.
+The forward process gradually adds Gaussian noise to the latent representation during training, while the reverse process—implemented as an iterative U-Net denoiser conditioned on the Neural Operator prior—progressively reconstructs the high-resolution satellite image during inference.}
+    \label{fig:Diffusion Process}
+\end{figure*}
+%---------- End Stage 3 Image ----------------
+
+
+%--------------- Start Experiments and Results ------------
+
+% \begin{document}
+
+\section{Results and Discussion}
+
+The performance of the proposed Hybrid Neural-Diffusion Super-Resolution (HNDSR) framework was evaluated using standard image quality metrics — Peak Signal-to-Noise Ratio (PSNR), Structural Similarity Index Measure (SSIM), and Learned Perceptual Image Patch Similarity (LPIPS). The experiments were conducted on the 4$\times$ satellite image super-resolution dataset \cite{tudela2023dataset}, with both low-resolution (LR) and high-resolution (HR) pairs used during training. The following subsections present the quantitative evaluation, convergence behavior, and comparison with state-of-the-art models.
+
+\subsection{Quantitative Evaluation}
+
+Fig~\ref{fig:Stage Wise Performance Summmary} summarizes the stage-wise quantitative results obtained from the proposed HNDSR architecture. The autoencoder-based Stage~1 achieved a PSNR of 27.68~dB and SSIM of 0.81, effectively reconstructing coarse structures and smooth regions. Incorporating the Neural Operator (Stage~2) improved both PSNR and SSIM to 28.35~dB and 0.84 respectively, highlighting the model’s ability to learn global dependencies and latent-scale correlations on the 4$\times$ satellite dataset~\cite{tudela2023dataset}. Finally, the Diffusion refinement stage (Stage~3) yielded a PSNR of 29.40~dB, SSIM of 0.87, and a perceptual LPIPS score of 0.16 — confirming its capability to generate fine details and realistic textures while preserving structural consistency.
+
+%--------------Start Table I ------------------
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{Images/table-01.pdf}
+    \caption{Stage-wise performance summary of the proposed HNDSR model.
+The table presents quantitative results for each stage of the HNDSR framework. The Autoencoder reconstructs low-level features, the Neural Operator (NO) learns global latent-space mappings, and the Diffusion Model refines fine textures and high-frequency details, yielding the highest PSNR, SSIM, and lowest LPIPS values.}
+    \label{fig:Stage Wise Performance Summmary}
+\end{figure*}
+%---------------End Table I -------------------
+
+\FloatBarrier % Prevent overlap with next section
+
+\subsection{Training Loss Convergence}
+
+The training loss progression for all three stages is illustrated in Fig.~\ref{fig:loss_curve}. As shown, the autoencoder stage converges rapidly due to its deterministic pixel-based reconstruction. The neural operator stage exhibits gradual stabilization, capturing scale-invariant representations in the latent domain. The diffusion refinement stage demonstrates slower but smoother convergence, typical for probabilistic models, confirming stable training dynamics and reduced overfitting.
+
+
+
+%----------- Start Fig-03 ------------
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{Images/fig-03.png}
+\caption{Training and validation loss convergence across the three stages of HNDSR.
+Stage 1 shows the convergence of the Autoencoder reconstruction loss, Stage 2 depicts the Neural Operator latent mapping loss, and Stage 3 illustrates the Diffusion Model denoising loss.}
+\label{fig:loss_curve}
+\end{figure*}
+%----------- End  Fig-03 -------------
+
+\FloatBarrier
+
+\subsection{Comparison with Existing Methods}
+
+To evaluate generalization and perceptual quality, the proposed HNDSR was compared with recent state-of-the-art super-resolution approaches, including E$^2$DiffSR \cite{e2diffsr} and NeurOp-Diff \cite{neurOpDiff}. Quantitative results for 4$\times$ super-resolution are presented in Table~\ref{tab:4x_results}. HNDSR achieves the highest PSNR (29.40~dB) and SSIM (0.87) while maintaining a competitive LPIPS score (0.16), outperforming both CNN-based and diffusion-based baselines. 
+The integration of deterministic 
+latent mapping and probabilistic texture refinement allows HNDSR to generate visually sharper and more natural satellite images.
+
+%--------Start Table II --------------
+\begin{table}[H]
+\centering
+\caption{Quantitative comparison on 4$\times$ satellite image super-resolution. 
+Our proposed HNDSR model achieves superior balance between pixel fidelity (PSNR/SSIM) 
+and perceptual realism (LPIPS).}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Model} & \textbf{PSNR (dB)} & \textbf{SSIM} & \textbf{LPIPS} \\ \hline
+LIIF \cite{liif2020} & 27.63 & 0.817 & 0.334 \\ \hline
+SADN \cite{sadn2021} & 28.09 & 0.824 & 0.320 \\ \hline
+IDM \cite{idm2022} & 28.22 & 0.828 & 0.284 \\ \hline
+EDiffSR \cite{ediffsr2023} & 28.47 & 0.831 & 0.271 \\ \hline
+SR3 \cite{sr32021} & 28.95 & 0.842 & 0.263 \\ \hline
+SPSR \cite{spsr2022} & 29.02 & 0.849 & 0.190 \\ \hline
+HAT-L \cite{hatl2023} & 29.21 & 0.852 & 0.184 \\ \hline
+\textbf{E$^2$DiffSR (2024)} \cite{e2diffsr} & \textbf{28.177} & --- & \textbf{0.088} \\ \hline
+\textbf{NeurOp-Diff (2025)} \cite{neurOpDiff} & \textbf{27.74} & \textbf{0.6509} & --- \\ \hline
+\textbf{HNDSR (Proposed)} & \textbf{29.40} & \textbf{0.870} & \textbf{0.160} \\ \hline
+\end{tabular}
+\label{tab:4x_results}
+\end{table}
+%--------End Table II --------------
+
+\FloatBarrier
+
+\subsection{Qualitative Analysis}
+
+Qualitative results further validate the superiority of HNDSR in enhancing fine-grained satellite textures. The model reconstructs sharper edges, natural vegetation textures, and fine terrain variations, minimizing blurring artifacts commonly observed in regression-based networks. Compared to previous diffusion and CNN models~\cite{e2diffsr,neurOpDiff}, HNDSR produces visually consistent high-frequency features while maintaining global coherence across large-scale scenes.
+
+% \end{document}
+
+
+
+%----------------- Start Conclusion and Future Work --------------------
+\section{Conclusion}
+
+This study introduced a novel hybrid framework, termed \textbf{HNDSR} (Hybrid Neural-Diffusion Super-Resolution), for high-quality satellite image reconstruction. The proposed model integrates deterministic latent encoding and probabilistic diffusion refinement, combining the strengths of autoencoder-based feature learning \cite{lim2017enhanced, ledig2017photo}, Neural Operator-based scale-aware mapping \cite{li2020fourier}, and diffusion-based generative modeling \cite{ho2020denoising, saharia2022image, rombach2022high}. This multi-stage synergy enables robust structural reconstruction, perceptual fidelity, and enhanced textural detail generation.
+
+Experimental evaluations on a 4$\times$ satellite dataset \cite{tudela2023dataset} demonstrated that HNDSR surpasses existing CNN and diffusion-based methods, achieving a PSNR of 29.40~dB, SSIM of 0.87, and LPIPS of 0.16. These results validate that the integration of deterministic and stochastic learning modules improves both reconstruction accuracy and perceptual quality, outperforming recent models such as E$^2$DiffSR \cite{e2diffsr} and NeurOp-Diff \cite{neurOpDiff}. Moreover, the diffusion refinement stage mitigates instability and artifacts often observed in GAN-based approaches.
+
+Although the architecture of HNDSR inherently supports \textit{continuous-scale} super-resolution through scale-aware conditioning in the Neural Operator and Implicit Amplification modules, the current implementation focuses on a fixed 4$\times$ dataset due to training constraints. Future work will extend this framework toward variable and higher-scale factors (e.g., 8$\times$), integrate attention-based conditioning, and explore its adaptation to multispectral and hyperspectral modalities for broader applications in remote sensing and Earth observation.
+
+
+%----------------- Start References --------------------
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+
+% -------------------------------------------------------
+% References (choose ONE of the two methods below)
+% -------------------------------------------------------
+
+% \bibliographystyle{IEEEtran}
+% \bibliography{references}
+
+\end{document}

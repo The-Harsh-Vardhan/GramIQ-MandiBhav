@@ -1,0 +1,846 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{placeins}
+\usepackage[all]{hypcap}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, decorations.pathreplacing}
+
+\begin{document}
+
+\title{ Tampered Image Detection And Localization - A Systematic Ablation Study Using Deep Learning}
+
+\author{
+\IEEEauthorblockN{Harsh Vardhan}
+\IEEEauthorblockA{
+Big Vision Internship Assignment \\
+Email: bt23csd041@iiitn.ac.in
+}
+}
+
+\maketitle
+
+% ==================== ABSTRACT ====================
+\begin{abstract}
+Digital images can be manipulated in ways that are invisible to the human eye. Detecting such tampering and pinpointing exactly which pixels were altered is a challenging problem in image forensics. This report presents a systematic ablation study for pixel-level image tamper detection and localization on the CASIA~v2.0 benchmark dataset (12,614 images). The final system uses a UNet segmentation model with a pretrained ResNet-34 encoder, Error Level Analysis (ELA) preprocessing, and CBAM attention modules. Through 60+ controlled experiments across four research tracks, we established a clear finding: \textbf{input representation matters most}. Switching from raw RGB images to Multi-Quality RGB ELA (9-channel) input produced a +34.19 percentage point improvement in Pixel~F1 --- more than all other improvements combined. The best model (vR.P.19) achieves a \textbf{Pixel~F1 of 0.7965}, \textbf{IoU of 0.6615}, and \textbf{Pixel~AUC of 0.9665}. Every experiment followed a strict single-variable ablation discipline (one change per experiment), enabling clear cause-and-effect analysis.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Image tampering detection, image forgery localization, error level analysis, UNet segmentation, ablation study, CASIA dataset.
+\end{IEEEkeywords}
+
+
+% ==================== INTRODUCTION ====================
+\section{Introduction}
+
+Digital images are ubiquitous in journalism, law enforcement, scientific research, and social media. However, modern image editing tools make it easy to manipulate photographs in ways that are nearly undetectable by the human eye. Common types of tampering include:
+
+\begin{itemize}
+    \item \textbf{Splicing:} Copying a region from one image and pasting it into another.
+    \item \textbf{Copy-move:} Duplicating a part of an image within the same image, often to hide or fabricate content.
+\end{itemize}
+
+Detecting whether an image has been tampered with (\textit{detection}) is useful, but knowing \textit{where} the tampering occurred (\textit{localization}) is far more valuable. This project tackles both tasks: given an input image, the system produces a binary mask highlighting the tampered pixels.
+
+Building such a system is difficult for several reasons. First, tampered regions often occupy a very small fraction of the image (sometimes less than 2\% of all pixels), creating a severe class imbalance at the pixel level. Second, skilled forgers adjust lighting, color, and compression to make edits blend seamlessly with the surrounding content. Third, JPEG compression artifacts can either mask or mimic tampering traces, complicating forensic analysis.
+
+This report describes a systematic approach to solving this problem. Rather than building a single model and reporting its results, we conducted \textbf{60+ controlled experiments} across four research tracks, changing exactly one variable at a time. This ablation methodology allows us to determine \textit{what actually works and why}, rather than relying on guesswork or combining multiple changes simultaneously.
+
+The key contributions of this work are:
+\begin{itemize}
+    \item A complete pipeline from raw images to pixel-level tamper localization using ELA preprocessing and pretrained UNet segmentation.
+    \item A rigorous ablation study establishing that \textbf{input representation dominates all other factors} --- the single biggest improvement came from how we preprocess the image, not from architecture or training tricks.
+    \item Transparent documentation of both successes and failures, including three failed research tracks that provided lessons directly shaping the final approach.
+    \item Full reproducibility via Weights~\&~Biases experiment tracking and fixed random seeds.
+    \item Open-source code and experiment logs available publicly.\footnote{GitHub: \url{https://github.com/The-Harsh-Vardhan/TIDAL-Tampered_Image_Detection_And_Localization}}\textsuperscript{,}\footnote{W\&B Report: \url{https://api.wandb.ai/links/tampered-image-detection-and-localization/w5fy6lb0}}
+\end{itemize}
+
+
+% ==================== RELATED WORK ====================
+\section{Related Work}
+
+Image forgery detection has been studied extensively over the past decade. This section reviews the main approaches that influenced our work.
+
+\subsection{Traditional Forensic Methods}
+
+Early forgery detection relied on hand-crafted features such as JPEG compression artifacts~\cite{bianchi2012jpeg}, noise inconsistencies, and Color Filter Array (CFA) patterns. Error Level Analysis (ELA)~\cite{krawetz2007picture} is one such technique: it re-saves an image at a given JPEG quality and measures the difference from the original. Tampered regions that were compressed at different quality levels show inconsistent residuals. While these methods are interpretable, they struggle with sophisticated forgeries and produce high false-positive rates when used alone.
+
+\subsection{CNN-Based Approaches}
+
+Deep learning transformed forgery detection by learning features directly from data. Nagm~et~al.~\cite{nagm2024etasr} combined ELA preprocessing with a custom CNN for binary classification (tampered vs.\ authentic), achieving 96.21\% accuracy on CASIA~v2.0 (JPEG-only subset). However, classification-only models cannot localize the tampered region --- they answer ``is it tampered?'' but not ``where?''
+
+\subsection{Segmentation-Based Localization}
+
+To achieve pixel-level localization, researchers adopted encoder-decoder architectures. The UNet~\cite{ronneberger2015unet}, originally designed for biomedical image segmentation, proved effective for tamper localization. Using pretrained encoders (e.g., ResNet~\cite{he2016resnet} trained on ImageNet~\cite{deng2009imagenet}) significantly improves performance on small forensic datasets by providing rich, generalizable feature representations. Nested variants like UNet++~\cite{zhou2018unetplusplus} further improve boundary delineation through dense skip connections.
+
+\subsection{Attention Mechanisms}
+
+Attention modules help the model focus on the most relevant features. CBAM (Convolutional Block Attention Module)~\cite{woo2018cbam} applies both channel-wise and spatial attention, teaching the model which feature maps and which spatial locations are most important. In our experiments, CBAM provided one of the most parameter-efficient improvements.
+
+\subsection{Multi-Stream and Frequency-Domain Methods}
+
+Recent state-of-the-art systems such as EMT-Net~\cite{emtnet2023} combine multiple input streams (RGB, noise maps, frequency features) using Swin Transformers, achieving AUC of 0.987 on the NIST dataset. SRM (Spatial Rich Model) noise filters~\cite{fridrich2012srm} extract high-pass noise residuals that reveal manipulation traces invisible in normal images. Bayar and Stamm~\cite{bayar2018constrained} proposed constrained convolutional layers that learn manipulation-specific features, while ManTra-Net~\cite{wu2019mantranet} introduced anomaly detection for forgery localization without requiring per-dataset fine-tuning. These techniques represent the current frontier, but require significantly more computational resources.
+
+
+% ==================== DATASET ====================
+\section{Dataset}
+
+\subsection{CASIA v2.0}
+
+All experiments use the \textbf{CASIA v2.0} dataset~\cite{dong2013casia}, a widely-used benchmark for image forgery detection and localization. Table~\ref{tab:dataset} summarizes its key properties.
+
+\begin{table}[H]
+\centering
+\caption{CASIA v2.0 Dataset Summary}
+\label{tab:dataset}
+\begin{tabular}{l r}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Total images & 12,614 \\
+Authentic images & 7,491 (59.4\%) \\
+Tampered images & 5,123 (40.6\%) \\
+\quad Copy-move forgeries & 3,295 \\
+\quad Splicing forgeries & 1,828 \\
+Ground truth & Binary masks for tampered images \\
+Input resolution & Resized to 384$\times$384 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Splitting}
+
+The dataset is split using stratified sampling (preserving the authentic/tampered ratio) with a fixed random seed of 42 for reproducibility:
+
+\begin{table}[H]
+\centering
+\caption{Data Split Configuration}
+\label{tab:split}
+\begin{tabular}{l r l}
+\toprule
+\textbf{Split} & \textbf{Count} & \textbf{Purpose} \\
+\midrule
+Training & 8,829 (70\%) & Model training \\
+Validation & 1,892 (15\%) & Early stopping \& LR scheduling \\
+Test & 1,893 (15\%) & Final reported metrics \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Challenges}
+
+Several challenges make this dataset difficult:
+\begin{itemize}
+    \item \textbf{Pixel-level class imbalance:} Most pixels in tampered images are still authentic. The tampered region is often very small.
+    \item \textbf{Forgery type imbalance:} Copy-move forgeries (3,295) significantly outnumber splicing forgeries (1,828).
+    \item \textbf{Compression artifacts:} JPEG artifacts can act as shortcuts, leading to data leakage if not handled carefully.
+\end{itemize}
+
+
+% ==================== METHODOLOGY ====================
+\section{Methodology}
+
+The final system consists of three main components: ELA preprocessing, a UNet segmentation model with a pretrained encoder, and a training pipeline with carefully chosen loss functions and hyperparameters.
+
+% ---- Architecture Diagram (vertical, single-column) ----
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.65cm,
+    box/.style={draw, rounded corners, minimum height=0.8cm, minimum width=5.8cm, align=center, font=\footnotesize},
+    outbox/.style={draw, rounded corners, minimum height=0.8cm, minimum width=2.6cm, align=center, font=\footnotesize},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick},
+]
+
+% Vertical flow
+\node[box, fill=blue!10] (input) {Input Image (384$\times$384$\times$3 RGB)};
+\node[box, fill=orange!15, below=of input] (ela) {Multi-Quality ELA Preprocessing\\Q=75, Q=85, Q=95 $\times$ RGB = 9 channels};
+\node[box, fill=green!15, below=of ela] (encoder) {ResNet-34 Encoder\\(ImageNet Pretrained, Frozen + BN Unfrozen)};
+\node[box, fill=purple!12, below=of encoder] (decoder) {UNet Decoder (5 blocks)\\+ CBAM Attention + Skip Connections};
+\node[box, fill=yellow!12, below=of decoder] (sigmoid) {Sigmoid Output (384$\times$384$\times$1)};
+
+% Two outputs side by side
+\node[outbox, fill=cyan!15, below left=0.6cm and -0.3cm of sigmoid] (mask) {Segmentation\\Mask};
+\node[outbox, fill=cyan!15, below right=0.6cm and -0.3cm of sigmoid] (label_out) {Image Label\\(Auth / Tampered)};
+
+% Main flow arrows
+\draw[arrow] (input) -- (ela);
+\draw[arrow] (ela) -- (encoder);
+\draw[arrow] (encoder) -- (decoder);
+\draw[arrow] (decoder) -- (sigmoid);
+\draw[arrow] (sigmoid.south) -- ++(-1.4, -0.3) -- (mask.north);
+\draw[arrow] (sigmoid.south) -- ++(1.4, -0.3) -- (label_out.north);
+
+% Skip connections (curved arrow on the right side)
+\draw[arrow, dashed, gray] (encoder.east) -- ++(0.35,0) |- node[pos=0.25, right, font=\scriptsize, gray, align=left] {skip\\connections} (decoder.east);
+
+% Annotation for classification
+\node[font=\scriptsize, gray, right=0.1cm of label_out] {max pixel\\probability};
+
+\end{tikzpicture}
+\caption{Architecture of the proposed tamper detection and localization pipeline. The input RGB image is preprocessed with multi-quality ELA to produce a 9-channel forensic representation. The frozen pretrained ResNet-34 encoder extracts hierarchical features, which are passed through the UNet decoder with CBAM attention and skip connections. The sigmoid output produces a pixel-level probability map; image-level classification is derived from the maximum pixel probability.}
+\label{fig:architecture}
+\end{figure}
+
+
+\subsection{Error Level Analysis (ELA) Preprocessing}
+
+ELA is a forensic preprocessing technique that reveals compression inconsistencies in images. It works as follows:
+
+\begin{enumerate}
+    \item Load the original image as RGB.
+    \item Re-save it as a JPEG at a specific quality level~$Q$.
+    \item Reload the recompressed image.
+    \item Compute the pixel-wise absolute difference between the original and the recompressed version.
+    \item Scale the brightness so the maximum difference maps to 255.
+\end{enumerate}
+
+Authentic regions compress uniformly and show low ELA residuals. Tampered regions, which were saved at different compression levels or composited from different sources, show inconsistencies that appear as bright artifacts in the ELA map.
+
+\textbf{Multi-Quality RGB ELA (Best Variant):} Instead of using a single quality level, the best configuration uses three quality levels --- $Q=75$, $Q=85$, and $Q=95$ --- each producing an RGB ELA map. These three maps are stacked to form a 9-channel input tensor ($3~\text{qualities} \times 3~\text{RGB channels} = 9~\text{channels}$). Each quality level captures different types and strengths of compression artifacts:
+
+\begin{itemize}
+    \item \textbf{Q=75 (aggressive)}: Produces large residuals; good at catching strong manipulations.
+    \item \textbf{Q=85 (balanced)}: Medium residuals; a general-purpose level.
+    \item \textbf{Q=95 (gentle)}: Small residuals; sensitive to subtle edits.
+\end{itemize}
+
+
+% ---- ELA Diagram ----
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={draw, rounded corners, minimum height=0.7cm, minimum width=2.8cm, align=center, font=\footnotesize},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick},
+]
+
+% Three Q boxes first, to center the original above them
+\node[box, fill=orange!10] (q75) {Re-save at Q=75};
+\node[box, fill=orange!10, right=0.3cm of q75] (q85) {Re-save at Q=85};
+\node[box, fill=orange!10, right=0.3cm of q85] (q95) {Re-save at Q=95};
+
+% Original image centered above the three Q boxes
+\node[box, fill=blue!10, above=0.6cm of q85] (orig) {Original Image (RGB)};
+
+\node[box, fill=yellow!15, below=0.6cm of q85] (diff) {Pixel-wise $|$Original $-$ Recompressed$|$};
+\node[box, fill=green!15, below=0.4cm of diff] (stack) {Stack $\rightarrow$ 9-Channel Tensor};
+\node[box, fill=purple!10, below=0.4cm of stack] (model) {Feed to UNet Model};
+
+\draw[arrow] (orig) -- (q75);
+\draw[arrow] (orig) -- (q85);
+\draw[arrow] (orig) -- (q95);
+\draw[arrow] (q75) -- (diff);
+\draw[arrow] (q85) -- (diff);
+\draw[arrow] (q95) -- (diff);
+\draw[arrow] (diff) -- (stack);
+\draw[arrow] (stack) -- (model);
+
+\end{tikzpicture}
+\caption{Multi-Quality RGB ELA preprocessing pipeline. The original image is recompressed at three JPEG quality levels (Q=75, Q=85, Q=95). The absolute difference between the original and each recompressed version captures compression inconsistencies at different sensitivity levels. The three RGB difference maps are stacked into a 9-channel tensor used as input to the model.}
+\label{fig:ela_pipeline}
+\end{figure}
+
+
+\subsection{Model Architecture}
+
+The model is a \textbf{UNet}~\cite{ronneberger2015unet} encoder-decoder segmentation network, implemented using the Segmentation Models PyTorch (SMP) library~\cite{yakubovskiy2019smp}.
+
+\begin{itemize}
+    \item \textbf{Encoder:} ResNet-34~\cite{he2016resnet} pretrained on ImageNet. All convolutional weights are \textit{frozen}; only BatchNorm layers are set to training mode (unfrozen). This allows the normalization statistics to adapt from natural images to ELA forensic images, while keeping the learned feature hierarchies intact. The first convolutional layer is adapted to accept 9 input channels.
+    \item \textbf{Decoder:} 5 upsampling blocks with channel dimensions (256, 128, 64, 32, 16) and skip connections at 4 resolution levels. Optional CBAM attention modules are placed after each decoder block.
+    \item \textbf{Output:} A single-channel sigmoid activation producing a 384$\times$384 pixel probability map. A threshold of 0.5 converts this to a binary mask.
+    \item \textbf{Image-level classification:} Derived from the segmentation output --- if any pixel in the predicted mask exceeds the threshold, the image is classified as tampered.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Model Parameter Summary}
+\label{tab:params}
+\begin{tabular}{l r}
+\toprule
+\textbf{Component} & \textbf{Parameters} \\
+\midrule
+Total parameters & 24.4M \\
+Trainable parameters & 3.17M (13\%) \\
+Encoder (frozen convolutions) & 21.3M \\
+Decoder (trainable) & $\sim$3.17M \\
+CBAM attention (optional) & +11,402 (+0.36\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{CBAM Attention Module}
+
+CBAM (Convolutional Block Attention Module)~\cite{woo2018cbam} is injected into all 5 UNet decoder blocks. It applies two sequential attention operations:
+
+\begin{enumerate}
+    \item \textbf{Channel attention:} Learns \textit{which feature channels} are most relevant. Uses a shared MLP (with bottleneck ratio 16) on both average-pooled and max-pooled features, combined with sigmoid gating.
+    \item \textbf{Spatial attention:} Learns \textit{which spatial locations} to focus on. Concatenates channel-wise average and max pooling, processes with a 7$\times$7 convolution, and applies sigmoid.
+\end{enumerate}
+
+CBAM adds only 11,402 parameters (0.36\% of trainable parameters) but produced a +3.57 percentage point improvement in Pixel~F1 --- the highest improvement-per-parameter of any change tested.
+
+
+\subsection{Training Configuration}
+
+Table~\ref{tab:training_config} lists the training hyperparameters used across all experiments in the primary research track (vR.P).
+
+\begin{table}[H]
+\centering
+\caption{Training Hyperparameters}
+\label{tab:training_config}
+\begin{tabular}{l l}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Optimizer & Adam~\cite{kingma2015adam} (weight decay $10^{-5}$) \\
+Learning rate & $10^{-3}$ \\
+Loss function & BCE + Dice~\cite{milletari2016vnet} \\
+LR scheduler & ReduceLROnPlateau (factor 0.5, patience 3) \\
+Early stopping & Patience 7 on validation loss \\
+Batch size & 16 \\
+Max epochs & 25 (50 for extended runs) \\
+Mixed precision & AMP~\cite{micikevicius2018mixed} + TF32 \\
+Hardware & Kaggle T4 / P100 GPUs \\
+Random seed & 42 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Evaluation Metrics}
+
+We use the following metrics to evaluate model performance, computed on \textbf{tampered images only} (since authentic images trivially score perfect masks):
+
+\begin{itemize}
+    \item \textbf{Pixel F1:} The primary metric. Harmonic mean of pixel-level precision and recall. Measures how well the predicted mask overlaps with the ground truth mask.
+    \item \textbf{IoU (Jaccard):} Intersection over Union between predicted and ground truth masks. A stricter metric than F1.
+    \item \textbf{Pixel AUC:} Area under the ROC curve at the pixel level. Threshold-independent measure of discrimination quality.
+    \item \textbf{Image Accuracy:} Binary classification accuracy --- what fraction of images are correctly labeled as authentic or tampered.
+\end{itemize}
+
+An important methodological note: early experiments computed metrics across all images (both authentic and tampered), which \textit{inflated} results because authentic images with all-zero ground truth masks always score perfect Dice/IoU/F1. From experiment vR.P.3 onward, all segmentation metrics are computed on tampered images only.
+
+
+% ==================== RESEARCH JOURNEY ====================
+\section{Research Journey}
+
+This project did not arrive at its final approach on the first attempt. The path included multiple failed approaches, each teaching lessons that directly shaped the next one. We document all four tracks here because the failures were as informative as the successes.
+
+\subsection{Track 1: Documentation-First (v0x) --- Failed}
+
+The project began with an extensive literature review. Documentation was written before any code: architecture designs, dataset analyses, and training plans. Too many ideas from research papers were added simultaneously, leading to a complex system on paper that was never tested.
+
+\textbf{Lesson:} Documentation without experimentation leads to untested assumptions. Start coding and validating early.
+
+\subsection{Track 2: Kaggle Notebook Reproduction (vK) --- Failed}
+
+A promising Kaggle notebook for image tampering detection was found and adapted. However, an audit revealed \textbf{data leakage} --- test images were leaking into training, inflating reported accuracy to $\sim$89.75\%. After fixing the leakage, the model (training from scratch on $\sim$10K images with 31.6M parameters) achieved only Tampered~F1~=~0.4101.
+
+\textbf{Lesson:} Always audit data pipelines for leakage. Training from scratch on small datasets is insufficient.
+
+\subsection{Track 3: Research Paper Reproduction (vR) --- Archived}
+
+The project pivoted to reproducing a published paper~\cite{nagm2024etasr}, achieving a best classification accuracy of 90.23\%. However, this architecture was classification-only --- it could not produce a localization mask.
+
+\textbf{Lesson:} Verify that the base architecture supports all required tasks before investing in ablation studies.
+
+\subsection{Track 4: Pretrained Ablation Study (vR.P) --- Final Approach}
+
+Armed with lessons from all prior failures, the final approach used:
+\begin{itemize}
+    \item A \textbf{pretrained encoder} (ResNet-34 on ImageNet) to avoid the small-dataset problem.
+    \item A \textbf{UNet segmentation model} for pixel-level localization.
+    \item \textbf{ELA preprocessing} (from the ETASR track insight) to give the model forensic input.
+    \item \textbf{Single-variable ablation:} exactly one change per experiment.
+    \item \textbf{Weights \& Biases} for experiment tracking and reproducibility.
+\end{itemize}
+
+This is the track that produced all final results reported below.
+
+
+% ==================== RESULTS ====================
+\section{Results}
+
+\subsection{Best Model Performance}
+
+The best model (vR.P.19, Multi-Quality RGB ELA 9-channel input) achieves:
+
+\begin{table}[H]
+\centering
+\caption{Best Model Results (vR.P.19)}
+\label{tab:best_results}
+\begin{tabular}{l c}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Pixel F1 & \textbf{0.7965} \\
+IoU (Jaccard) & 0.6615 \\
+Pixel AUC & 0.9665 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Top 5 Runs}
+
+Table~\ref{tab:top5} shows the five best-performing experiments.
+
+\begin{table}[H]
+\centering
+\caption{Top 5 Experiment Results by Pixel F1}
+\label{tab:top5}
+\begin{tabular}{c l c l}
+\toprule
+\textbf{Rank} & \textbf{Version} & \textbf{Pixel F1} & \textbf{Configuration} \\
+\midrule
+1 & vR.P.19 & \textbf{0.7965} & Multi-Q RGB ELA 9ch \\
+2 & vR.P.30.1 & 0.7762 & Multi-Q ELA + CBAM, 50ep \\
+3 & vR.P.30.4 & 0.7745 & Multi-Q ELA + CBAM + aug \\
+4 & vR.P.30.2 & 0.7721 & Multi-Q ELA + CBAM + unfreeze \\
+5 & vR.P.30 & 0.7714 & Multi-Q ELA + CBAM, 25ep \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/radar_comparison.png}
+\caption{Multi-metric radar comparison across three key configurations: RGB baseline (P.1), ELA baseline (P.3), and best model (vR.P.19). Each axis represents a different performance metric (Pixel F1, IoU, Pixel AUC, Image Accuracy). The area enclosed by vR.P.19 is substantially larger, confirming its dominance across all evaluation criteria.}
+\label{fig:radar}
+\end{figure*}
+
+
+\subsection{Key Experiment Results}
+
+Table~\ref{tab:key_experiments} summarizes the most important experiments from the ablation study. Each row represents exactly one change from the baseline. The full W\&B experiment dashboard is available online.\footnote{\url{https://api.wandb.ai/links/tampered-image-detection-and-localization/w5fy6lb0}}
+
+\begin{table}[H]
+\centering
+\caption{Key Experiment Results from the Ablation Study. Each row is a single-variable change. Bold rows mark the most significant findings.}
+\label{tab:key_experiments}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l l c c l}
+\toprule
+\textbf{Ver.} & \textbf{What Changed} & \textbf{Px F1} & \textbf{IoU} & \textbf{Verdict} \\
+\midrule
+P.1 & RGB baseline (proper GT) & .4546 & .2942 & Baseline \\
+\textbf{P.3} & \textbf{ELA input (replace RGB)} & \textbf{.6920} & \textbf{.5291} & \textbf{Strong +} \\
+P.5 & ResNet-50 encoder (RGB) & .5137 & .3456 & Positive \\
+P.6 & EfficientNet-B0 (RGB) & .5217 & .3529 & Positive \\
+P.7 & Extended training (50ep) & .7154 & .5569 & Positive \\
+P.9 & Focal + Dice loss & .6923 & .5294 & Neutral \\
+P.10 & CBAM attention & .7277 & .5719 & Positive \\
+P.12 & Data augmentation & .6968 & .5347 & Neutral \\
+P.14b & Test-Time Aug (TTA) & .6388 & .4693 & Negative \\
+\textbf{P.15} & \textbf{Multi-Q ELA (gray)} & \textbf{.7329} & \textbf{.5785} & \textbf{Positive} \\
+P.16 & DCT spatial map & .3209 & .1911 & Negative \\
+P.17 & ELA + DCT fusion & .7302 & .5751 & Positive \\
+\textbf{P.19} & \textbf{Multi-Q RGB ELA 9ch} & \textbf{.7965} & \textbf{.6615} & \textbf{Best} \\
+P.27 & JPEG compression aug & .7523 & .6029 & Positive \\
+P.28 & Cosine annealing LR & .7601 & .6132 & Positive \\
+P.30.1 & Multi-Q + CBAM (50ep) & .7762 & .6344 & 2nd Best \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/training_curves.png}
+\caption{Training loss and validation Pixel F1 curves for representative experiments. The curves illustrate convergence behavior: ELA-based models (P.3, P.15, P.19) converge to substantially higher F1 values than the RGB baseline (P.1), confirming that input representation is the dominant factor.}
+\label{fig:training_curves}
+\end{figure*}
+
+
+% ==================== ABLATION STUDY ====================
+\section{Ablation Study}
+
+The ablation study is the core contribution of this work. Each experiment changed \textit{exactly one variable} from a baseline, enabling clear cause-and-effect analysis. This section organizes findings by category.
+
+\subsection{Impact Hierarchy}
+
+Table~\ref{tab:impact} ranks all modifications by their impact on Pixel~F1 relative to the ELA baseline (P.3, F1=0.6920).
+
+\begin{table}[H]
+\centering
+\caption{Ablation Impact Hierarchy (Delta from ELA Baseline P.3)}
+\label{tab:impact}
+\begin{tabular}{c l l c}
+\toprule
+\textbf{Rank} & \textbf{Category} & \textbf{Change} & \textbf{$\Delta$ F1 (pp)} \\
+\midrule
+1 & Input & Multi-Q RGB ELA 9ch (P.19) & +10.45 \\
+2 & Input & Multi-Q ELA gray (P.15) & +4.09 \\
+3 & Input & ELA+DCT fusion (P.17) & +3.82 \\
+4 & Architecture & CBAM attention (P.10) & +3.57 \\
+5 & Training & Extended training (P.7) & +2.34 \\
+6 & Input & RGB+ELA fusion (P.4) & +1.33 \\
+7 & Training & Progressive unfreeze (P.8) & +0.65 \\
+8 & Training & Augmentation (P.12) & +0.48 \\
+9 & Loss & Focal+Dice (P.9) & +0.03 \\
+10 & Evaluation & TTA (P.14b) & \textbf{$-$5.32} \\
+11 & Input & DCT-only (P.16) & \textbf{$-$37.11} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The hierarchy is clear and consistent:
+
+\begin{center}
+\textbf{Input representation $>$ Attention mechanisms $>$ Training configuration $>$ Loss function}
+\end{center}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/impact_hierarchy.png}
+\caption{Visual impact hierarchy: Pixel F1 delta (percentage points) for each experimental modification relative to the ELA baseline (P.3, F1=0.6920). Positive bars indicate improvement; negative bars indicate degradation. Multi-Quality RGB ELA (P.19) and grayscale ELA (P.15) yield the largest gains; DCT-only (P.16) and TTA (P.14b) hurt performance.}
+\label{fig:impact_hierarchy}
+\end{figure*}
+
+
+\subsection{Input Representation (Dominant Factor)}
+
+This was the most impactful category across the entire study.
+
+\begin{itemize}
+    \item \textbf{RGB to ELA (P.3):} +23.74pp Pixel~F1. The single largest improvement in the study. False positive rate dropped from 22.6\% to 2.7\%.
+    \item \textbf{Multi-Q ELA grayscale (P.15):} +4.09pp from P.3. Three grayscale ELA maps at Q=75/85/95 capture complementary forensic signals.
+    \item \textbf{Multi-Q RGB ELA 9-channel (P.19):} +10.45pp from P.3. Keeping full RGB color information in each ELA map (rather than converting to grayscale) was worth an additional +6.36pp over the grayscale variant.
+    \item \textbf{DCT-only (P.16):} $-$37.11pp. Catastrophic failure. Block-level frequency features alone are completely insufficient.
+\end{itemize}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/feature_set_comparison.png}
+\caption{Best Pixel F1 and IoU achieved by each input representation type. Multi-Quality RGB ELA (9 channels) achieves the highest scores across both metrics, while DCT-only fails catastrophically. The chart confirms that input preprocessing is the single most impactful design decision in tamper localization.}
+\label{fig:feature_comparison}
+\end{figure*}
+
+
+\subsection{Encoder Architecture}
+
+\begin{itemize}
+    \item \textbf{CBAM attention (P.10):} +3.57pp from P.3. Best architectural modification. Achieved the lowest false positive rate (2.0\%).
+    \item \textbf{ResNet-50 (P.5):} F1=0.5137 on RGB (2.86$\times$ more parameters, still below ELA on ResNet-34).
+    \item \textbf{EfficientNet-B0 (P.6):} F1=0.5217 on RGB (smallest model, but still far below ELA results).
+\end{itemize}
+
+This demonstrates that \textbf{ELA input on ResNet-34} outperforms larger encoders on raw RGB --- input preprocessing matters more than encoder capacity.
+
+
+\subsection{Training Strategies}
+
+\begin{itemize}
+    \item \textbf{Extended training (P.7):} +2.34pp. The 25-epoch default was premature; the best epoch was at epoch~36.
+    \item \textbf{Data augmentation (P.12):} +0.48pp Pixel F1 but achieved the best image-level accuracy (88.48\%).
+    \item \textbf{Focal+Dice loss (P.9):} +0.03pp (essentially neutral). Focal Loss~\cite{lin2017focal} concentrates on hard examples, but the Dice component already handles class imbalance.
+    \item \textbf{TTA (P.14b):} $-$5.32pp. Averaging across flipped views smooths sharp mask boundaries, destroying localization precision.
+\end{itemize}
+
+
+\subsection{Diminishing Returns}
+
+After Pixel~F1 $\sim$0.78, combining improvements shows diminishing returns. For example, vR.P.30.1 (Multi-Q ELA + CBAM + 50 epochs) = 0.7762, which did \textit{not} surpass P.19's 0.7965. This suggests the model approaches the ceiling of what the dataset and architecture can support.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/top_experiments_bar.png}
+\caption{Top 15 experiments ranked by Pixel F1 score. vR.P.19 (Multi-Quality RGB ELA, 9-channel) leads the leaderboard. The cluster of vR.P.30.x combination experiments (CBAM + extended training) fall below P.19, illustrating diminishing returns when multiple improvements are combined after a strong input representation baseline.}
+\label{fig:top_experiments}
+\end{figure*}
+
+
+% ==================== Experiment Lineage Diagram ====================
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.55cm and 1.0cm,
+    % Node styles
+    basenode/.style={draw, rounded corners=3pt, minimum height=0.7cm, minimum width=2.4cm, align=center, font=\scriptsize, thick},
+    bestnode/.style={basenode, fill=green!25, line width=1.5pt},
+    posnode/.style={basenode, fill=blue!10},
+    negnode/.style={basenode, fill=red!15},
+    neutnode/.style={basenode, fill=gray!10},
+    % Arrow styles
+    mainflow/.style={-{Stealth[length=2.5mm]}, thick, black},
+    branchflow/.style={-{Stealth[length=2mm]}, thick, black!60},
+    % Delta label style
+    delta/.style={font=\tiny, fill=white, inner sep=1pt, text=black!70},
+]
+
+% ===== Main trunk (left column, top to bottom) =====
+\node[neutnode] (p0) {P.0 RGB Baseline\\\textbf{F1 = 0.3749}};
+\node[neutnode, below=0.5cm of p0] (p1) {P.1 Dataset Fix\\\textbf{F1 = 0.4546}};
+\node[posnode, below=0.5cm of p1] (p3) {P.3 ELA Input\\\textbf{F1 = 0.6920}};
+\node[posnode, below=0.5cm of p3] (p15) {P.15 Multi-Q ELA (gray)\\\textbf{F1 = 0.7329}};
+\node[bestnode, below=0.5cm of p15] (p19) {P.19 Multi-Q RGB ELA 9ch\\\textbf{F1 = 0.7965}};
+
+% Main trunk arrows with delta annotations
+\draw[mainflow] (p0) -- node[delta, right=2pt] {+0.0797} (p1);
+\draw[mainflow] (p1) -- node[delta, right=2pt] {\textcolor{green!50!black}{+0.2374}} (p3);
+\draw[mainflow] (p3) -- node[delta, right=2pt] {+0.0409} (p15);
+\draw[mainflow] (p15) -- node[delta, right=2pt] {+0.0636} (p19);
+
+% ===== Branches from P.3 (training & architecture explorations) =====
+\node[posnode, right=1.8cm of p3] (p10) {P.10 CBAM Attention\\\textbf{F1 = 0.7277}};
+\node[posnode, above=0.5cm of p10] (p7) {P.7 Extended 50ep\\\textbf{F1 = 0.7154}};
+\node[negnode, below=0.5cm of p10] (p16) {P.16 DCT Only\\\textbf{F1 = 0.3209}};
+
+\draw[branchflow] (p3.east) -- node[delta, above=1pt] {+0.0234} (p7.west);
+\draw[branchflow] (p3.east) -- node[delta, above=1pt] {+0.0357} (p10.west);
+\draw[branchflow] (p3.east) -- node[delta, below=1pt] {\textcolor{red!70!black}{$-$0.3711}} (p16.west);
+
+% ===== Branches from P.19 (combination experiments) =====
+\node[posnode, right=1.8cm of p19] (p30) {P.30 + CBAM\\\textbf{F1 = 0.7714}};
+\node[posnode, right=1.0cm of p30] (p301) {P.30.1 + 50ep\\\textbf{F1 = 0.7762}};
+
+\draw[branchflow] (p19.east) -- (p30.west);
+\draw[branchflow] (p30.east) -- (p301.west);
+
+% ===== BEST star marker =====
+\node[font=\scriptsize\bfseries, text=green!50!black, left=0.15cm of p19] {BEST};
+
+% ===== Legend =====
+\node[anchor=north west, font=\scriptsize\bfseries] at ([xshift=4.5cm, yshift=0.2cm]p0.north east) (legendtitle) {Legend:};
+\node[bestnode, minimum width=1.2cm, minimum height=0.35cm, right=0.2cm of legendtitle, font=\tiny] (leg1) {Best};
+\node[posnode, minimum width=1.2cm, minimum height=0.35cm, right=0.15cm of leg1, font=\tiny] (leg2) {Positive};
+\node[negnode, minimum width=1.2cm, minimum height=0.35cm, right=0.15cm of leg2, font=\tiny] (leg3) {Negative};
+\node[neutnode, minimum width=1.2cm, minimum height=0.35cm, right=0.15cm of leg3, font=\tiny] (leg4) {Baseline};
+
+\end{tikzpicture}
+\caption{Experiment lineage diagram for the vR.P research track. The main trunk (left) shows the primary evolution path from RGB baseline (P.0) to the best model (P.19, Pixel F1 = 0.7965). Branches show single-variable explorations from the ELA baseline (P.3). Delta annotations on arrows indicate the Pixel F1 change. The largest single improvement (+0.2374) was switching from RGB to ELA input. Green = best result; blue = positive; red = negative; gray = baseline.}
+\label{fig:lineage}
+\end{figure*}
+
+\FloatBarrier
+
+
+% ==================== ERROR ANALYSIS ====================
+\section{Error Analysis}
+
+\subsection{False Positive and False Negative Rates}
+
+Table~\ref{tab:error_rates} shows how false positive (FP) and false negative (FN) rates evolved across key configurations.
+
+\begin{table}[H]
+\centering
+\caption{False Positive and False Negative Rates}
+\label{tab:error_rates}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Configuration} & \textbf{FP Rate} & \textbf{FN Rate} \\
+\midrule
+RGB baseline (P.1) & 22.6\% & 40.4\% \\
+ELA baseline (P.3) & 2.7\% & 28.6\% \\
+CBAM attention (P.10) & 2.0\% & 28.3\% \\
+Data augmentation (P.12) & 2.6\% & 24.6\% \\
+TTA (P.14b) & 1.2\% & 29.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+ELA reduces the false positive rate dramatically (22.6\% $\rightarrow$ 2.7\%). CBAM further reduces it to 2.0\%. The remaining errors are primarily false negatives --- the model misses some tampered regions, particularly:
+
+\begin{itemize}
+    \item Subtle copy-move forgeries where source and target textures are very similar.
+    \item Very small tampered regions ($<$2\% of image area).
+    \item Images that have been re-saved multiple times, destroying the ELA signal.
+\end{itemize}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{Figures/precision_recall_scatter.png}
+\caption{Precision vs.\ recall scatter by feature set. ELA-based inputs (ELA, Multi-Q ELA Gray, Multi-Q RGB ELA) occupy the upper-right quadrant, indicating both high precision and high recall. The RGB baseline and DCT-only configurations are in the lower-left, confirming that input representation is the key determinant of the precision-recall balance.}
+\label{fig:pr_scatter}
+\end{figure*}
+
+
+\subsection{Best Model Detailed Metrics}
+
+Table~\ref{tab:detailed_metrics} presents the full metric breakdown for the best model (vR.P.19), showing the precision-recall trade-off.
+
+\begin{table}[H]
+\centering
+\caption{Detailed Metrics for the Best Model (vR.P.19)}
+\label{tab:detailed_metrics}
+\begin{tabular}{l c}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Pixel F1 & 0.7965 \\
+Pixel IoU & 0.6618 \\
+Pixel AUC & 0.9726 \\
+Pixel Precision & 0.8122 \\
+Pixel Recall & 0.7829 \\
+Image Accuracy & 90.39\% \\
+Image Macro F1 & 0.8961 \\
+Image ROC-AUC & 0.9726 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The model achieves a strong balance of precision (0.8122) and recall (0.7829) --- it accurately identifies tampered regions while successfully capturing the majority of tampered pixels.
+
+
+% ==================== REPRODUCIBILITY ====================
+\section{Reproducibility and Experiment Tracking}
+
+Reproducibility was a core design principle throughout this project.
+
+\subsection{Fixed Experimental Constants}
+
+Every experiment in the vR.P track shares the same dataset, random seed (42), data split (70/15/15 stratified), input resolution (384$\times$384), decoder architecture (UNet with skip connections), batch size (16), and framework (PyTorch + SMP). Only one variable is changed per experiment.
+
+\subsection{Weights \& Biases Integration}
+
+All experiments are logged to a centralized W\&B project, tracking:
+\begin{itemize}
+    \item \textbf{Per-epoch:} training loss, validation loss, validation Pixel F1, validation IoU, learning rate.
+    \item \textbf{Final test:} all segmentation and classification metrics.
+    \item \textbf{Media:} prediction visualization examples.
+\end{itemize}
+
+A centralized leaderboard notebook automatically queries the W\&B API to generate up-to-date comparison tables and ablation charts.
+
+\subsection{Reproducibility Verification}
+
+Two experiments (vR.P.3 and vR.P.10) were run twice independently on Kaggle T4 GPUs. Both runs produced identical metrics, confirming the reproducibility of results with seed~42.
+
+
+% ==================== KEY LEARNINGS ====================
+\section{Key Learnings}
+
+The following lessons emerged from the full experimental journey:
+
+\begin{enumerate}
+    \item \textbf{Data leakage destroys credibility.} The Kaggle baseline appeared to work well but had inflated results due to test data leaking into training. Always audit data pipelines.
+
+    \item \textbf{Pretrained models are essential for small datasets.} Training from scratch on $\sim$10K images learns only low-level features. Pretrained encoders provide rich, generalizable representations.
+
+    \item \textbf{Input representation matters more than architecture.} ELA preprocessing (+23.74pp) and multi-quality ELA (+10.45pp more) produced far larger gains than any architectural change.
+
+    \item \textbf{Change one thing at a time.} Early attempts that added multiple improvements simultaneously led to confusion and failure. Single-variable ablation is the only way to understand what actually works.
+
+    \item \textbf{Negative results are valuable.} Knowing that DCT alone fails ($-$37.11pp) or that TTA hurts localization ($-$5.32pp) prevents wasted effort in future work.
+
+    \item \textbf{Verify the base approach supports all tasks.} An entire research track (vR.x.x) was discontinued because the architecture could only classify, not localize.
+
+    \item \textbf{Track experiments formally.} Weights \& Biases~\cite{wandb2020} made it possible to compare 60+ experiments systematically with reproducible metrics.
+\end{enumerate}
+
+
+% ==================== LIMITATIONS ====================
+\section{Limitations}
+
+\begin{enumerate}
+    \item \textbf{Single dataset:} All results are on CASIA v2.0 only. Cross-dataset generalization (Columbia, Coverage, NIST) is untested.
+    \item \textbf{Fixed resolution:} 384$\times$384 input may lose fine details. Higher resolution (512$\times$512+) may improve boundary precision.
+    \item \textbf{Binary segmentation only:} The model treats all tampering as one class. It does not distinguish between splicing and copy-move.
+    \item \textbf{No robustness testing:} Behavior against post-processing attacks (JPEG recompression, blur, noise addition) is not evaluated.
+    \item \textbf{No SRM noise features:} Spatial Rich Model noise extraction --- used by state-of-the-art systems --- is not yet implemented.
+    \item \textbf{Diminishing returns:} After Pixel F1 $\sim$0.80, the current architecture likely needs different techniques (transformers, larger datasets) to push further.
+\end{enumerate}
+
+
+% ==================== FUTURE WORK ====================
+\section{Future Work}
+
+\begin{itemize}
+    \item \textbf{Cross-dataset evaluation:} Test on Columbia, Coverage, CoMoFoD, and NIST datasets to verify generalization.
+    \item \textbf{Transformer-based encoders:} Swin Transformer or ConvNeXt may capture long-range manipulation patterns better than ResNet.
+    \item \textbf{SRM noise filters:} Spatial Rich Model high-pass filters for manipulation trace extraction in the noise domain.
+    \item \textbf{Higher resolution:} Test at 512$\times$512 or 640$\times$640 to capture finer boundary details.
+    \item \textbf{Ensemble methods:} Combine predictions from multiple ELA variants, CBAM, and augmentation configurations.
+    \item \textbf{Multi-class segmentation:} Distinguish splicing from copy-move at the pixel level.
+\end{itemize}
+
+
+% ==================== CONCLUSION ====================
+\section{Conclusion}
+
+This report presented a systematic ablation study for image tamper detection and localization on the CASIA~v2.0 dataset. Through 60+ controlled experiments across four research tracks, we demonstrated that:
+
+\begin{enumerate}
+    \item \textbf{Input representation is the dominant factor.} Switching from raw RGB to Multi-Quality RGB ELA (9-channel) produced a +34.19 percentage point improvement in Pixel~F1 --- far exceeding any architectural or training change.
+    \item \textbf{The best model achieves Pixel F1 = 0.7965, IoU = 0.6615, and Pixel AUC = 0.9665}, using a UNet with a frozen pretrained ResNet-34 encoder and 9-channel multi-quality ELA input.
+    \item \textbf{Single-variable ablation discipline} transforms ad-hoc experimentation into systematic scientific investigation, enabling clear cause-and-effect understanding.
+    \item \textbf{Failures are as informative as successes.} Each failed research track contributed lessons that directly improved the next approach.
+\end{enumerate}
+
+The impact hierarchy established by this study --- \textbf{Input representation $>$ Attention mechanisms $>$ Training configuration $>$ Loss function} --- provides a clear roadmap for future work: invest in better input representations before trying more complex architectures.
+
+
+% ==================== REFERENCES ====================
+\begin{thebibliography}{99}
+
+\bibitem{dong2013casia}
+J.~Dong, W.~Wang, and T.~Tan, ``CASIA Image Tampering Detection Evaluation Database,'' in \textit{Proc. IEEE China Summit and Int. Conf. on Signal and Information Processing}, 2013.
+
+\bibitem{krawetz2007picture}
+N.~Krawetz, ``A Picture's Worth\ldots Digital Image Analysis and Forensics,'' \textit{Hacker Factor Solutions}, 2007.
+
+\bibitem{nagm2024etasr}
+A.~Nagm \textit{et~al.}, ``Enhanced Image Tampering Detection using ELA and a CNN,'' \textit{Engineering, Technology \& Applied Science Research (ETASR)}, vol.~14, no.~1, pp.~12757--12762, 2024.
+
+\bibitem{ronneberger2015unet}
+O.~Ronneberger, P.~Fischer, and T.~Brox, ``U-Net: Convolutional Networks for Biomedical Image Segmentation,'' in \textit{Proc. MICCAI}, 2015.
+
+\bibitem{he2016resnet}
+K.~He, X.~Zhang, S.~Ren, and J.~Sun, ``Deep Residual Learning for Image Recognition,'' in \textit{Proc. IEEE CVPR}, 2016.
+
+\bibitem{woo2018cbam}
+S.~Woo, J.~Park, J.-Y.~Lee, and I.~S.~Kweon, ``CBAM: Convolutional Block Attention Module,'' in \textit{Proc. ECCV}, 2018.
+
+\bibitem{yakubovskiy2019smp}
+P.~Yakubovskiy, ``Segmentation Models PyTorch,'' GitHub, 2019. [Online]. Available: \url{https://github.com/qubvel/segmentation_models.pytorch}
+
+\bibitem{bianchi2012jpeg}
+T.~Bianchi and A.~Piva, ``Image Forgery Localization via Block-Grained Analysis of JPEG Artifacts,'' \textit{IEEE Trans. Information Forensics and Security}, vol.~7, no.~3, pp.~1003--1017, 2012.
+
+\bibitem{fridrich2012srm}
+J.~Fridrich and J.~Kodovsky, ``Rich Models for Steganalysis of Digital Images,'' \textit{IEEE Trans. Information Forensics and Security}, vol.~7, no.~3, pp.~868--882, 2012.
+
+\bibitem{emtnet2023}
+J.~Liu \textit{et~al.}, ``EMT-Net: Efficient Multi-Task Network for Image Manipulation Detection and Localization,'' in \textit{Proc. IEEE Int. Conf. on Multimedia and Expo (ICME)}, 2023.
+
+\bibitem{deng2009imagenet}
+J.~Deng, W.~Dong, R.~Socher, L.-J.~Li, K.~Li, and L.~Fei-Fei, ``ImageNet: A Large-Scale Hierarchical Image Database,'' in \textit{Proc. IEEE CVPR}, 2009.
+
+\bibitem{milletari2016vnet}
+F.~Milletari, N.~Navab, and S.-A.~Ahmadi, ``V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation,'' in \textit{Proc. Int. Conf. on 3D Vision (3DV)}, 2016.
+
+\bibitem{lin2017focal}
+T.-Y.~Lin, P.~Goyal, R.~Girshick, K.~He, and P.~Doll\'{a}r, ``Focal Loss for Dense Object Detection,'' in \textit{Proc. IEEE ICCV}, 2017.
+
+\bibitem{kingma2015adam}
+D.~P.~Kingma and J.~Ba, ``Adam: A Method for Stochastic Optimization,'' in \textit{Proc. ICLR}, 2015.
+
+\bibitem{micikevicius2018mixed}
+P.~Micikevicius \textit{et~al.}, ``Mixed Precision Training,'' in \textit{Proc. ICLR}, 2018.
+
+\bibitem{zhou2018unetplusplus}
+Z.~Zhou, M.~M.~Rahman~Siddiquee, N.~Tajbakhsh, and J.~Liang, ``UNet++: A Nested U-Net Architecture for Medical Image Segmentation,'' in \textit{Deep Learning in Medical Image Analysis}, 2018.
+
+\bibitem{bayar2018constrained}
+B.~Bayar and M.~C.~Stamm, ``Constrained Convolutional Neural Networks: A New Approach Towards General Purpose Image Manipulation Detection,'' \textit{IEEE Trans. Information Forensics and Security}, vol.~13, no.~11, pp.~2691--2706, 2018.
+
+\bibitem{wu2019mantranet}
+Y.~Wu, W.~AbdAlmageed, and P.~Natarajan, ``ManTra-Net: Manipulation Tracing Network for Detection and Localization of Image Forgeries with Anomalous Features,'' in \textit{Proc. IEEE CVPR}, 2019.
+
+\bibitem{wandb2020}
+L.~Biewald, ``Experiment Tracking with Weights and Biases,'' 2020. [Online]. Available: \url{https://www.wandb.com}
+
+\end{thebibliography}
+
+\end{document}

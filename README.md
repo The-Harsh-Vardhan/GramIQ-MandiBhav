@@ -5,16 +5,21 @@ Automated mandi-price content pipeline for soybean and cotton using:
 - Python analytics
 - Gemini English article generation
 - Gemini batched translations
-- JSON output and static-site rendering
+- Supabase-backed article persistence
+- Next.js publishing on Vercel
 
-## What Changed
+## Target Architecture
 
-The live ingestion path is now aligned to the OGD mandi dataset you shared:
-- uses the canonical OGD resource `9ef84268-d588-465a-a308-a864a43d0070` by default
-- sends `filters[commodity]` explicitly instead of assuming one resource per commodity
-- paginates through OGD results with `offset` and `limit`
-- tries commodity aliases such as `Soyabean` before falling back
-- logs clearly when live mode is active and when the pipeline falls back to mock data
+```text
+OGD API
+-> Python ingestion and analytics
+-> Supabase PostgreSQL
+-> Next.js App Router
+-> Vercel
+```
+
+SQLite and static-site generation remain available only as compatibility paths. The intended
+end state is `DATA_BACKEND=supabase` and `PUBLISHING_TARGET=vercel`.
 
 ## Quick Start
 
@@ -35,6 +40,12 @@ PIPELINE_MODE=live
 OGD_API_KEY=your_ogd_api_key
 OGD_RESOURCE_ID=9ef84268-d588-465a-a308-a864a43d0070
 OGD_PAGE_LIMIT=1000
+DATA_BACKEND=supabase
+PUBLISHING_TARGET=vercel
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_public_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+WRITE_ARTICLE_ARTIFACTS=false
 ```
 
 Then run:
@@ -59,6 +70,12 @@ python main.py --mode dev
 | `OGD_RESOURCE_ID` | No | Defaults to the OGD mandi dataset resource |
 | `OGD_PAGE_LIMIT` | No | Per-request OGD page size; defaults to `1000` |
 | `GEMINI_MODEL` | No | Override Gemini model if needed |
+| `DATA_BACKEND` | Recommended | `supabase` for the target architecture |
+| `PUBLISHING_TARGET` | Recommended | `vercel` to disable GitHub Pages publishing |
+| `SUPABASE_URL` | Supabase only | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase frontend | Public browser key for the Next.js app |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase pipeline | Server-side key for Python upserts |
+| `WRITE_ARTICLE_ARTIFACTS` | No | `false` for database-first runs |
 
 ## Live OGD Ingestion
 
@@ -110,9 +127,9 @@ CLI
 -> get_provider()
 -> LiveProvider or MockProvider
 -> fetch current-day records
--> store in SQLite
+-> store in Supabase or SQLite
 -> fetch previous-day records
--> store in SQLite
+-> store in Supabase or SQLite
 -> analytics
 ```
 
@@ -124,8 +141,8 @@ Data
 -> Gemini batch English generation per commodity
 -> Deterministic Python SEO/FAQs/tables
 -> Gemini batch translation per commodity
--> JSON output
--> Static site
+-> Article repository upsert
+-> Next.js frontend reads from Supabase
 ```
 
 ## Common Commands
@@ -136,9 +153,10 @@ python main.py --mode live
 python main.py --mode live --commodities soybean
 python main.py --skip-translate
 python main.py --evaluate-only --date 2026-06-04
-python build_site.py --date 2026-06-04
 pytest
 ```
+
+Frontend setup and deployment are in [docs/supabase-vercel-migration.md](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/docs/supabase-vercel-migration.md>).
 
 ## Project Files To Know
 
@@ -148,6 +166,9 @@ pytest
 | [ingestion.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/ingestion.py>) | mock/live providers and ingestion flow |
 | [analytics.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/analytics.py>) | Python-only analytics |
 | [main.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/main.py>) | pipeline orchestration |
+| [repository.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/repository.py>) | canonical article persistence abstraction |
+| [supabase_backend.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/supabase_backend.py>) | Supabase REST storage adapter |
+| [web/package.json](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/web/package.json>) | Next.js frontend for Vercel |
 | [docs/quickstart.md](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/docs/quickstart.md>) | setup and troubleshooting |
 | [.env.example](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/.env.example>) | starter env template |
 

@@ -222,11 +222,12 @@ def stage_generate_and_assemble(
     """Generate, translate, and write all articles. Returns (published, review, blocked)."""
     import config
     from llm_engine import generate_articles_for_commodity, build_keywords
+    from repository import ArticleRepository
     from translator import translate_articles
     from seo_assembler import compute_confidence, assemble_final_article, write_article_file
-    from database import insert_article
 
     counts = {"published": 0, "review_required": 0, "blocked": 0}
+    article_repository = ArticleRepository()
     scopes_by_commodity: dict[str, list] = {}
     for scope in scope_targets:
         scopes_by_commodity.setdefault(scope.commodity, []).append(scope)
@@ -342,6 +343,7 @@ def stage_generate_and_assemble(
                     article, payload, scope, "en", confidence, status, run_id
                 )
                 write_article_file(en_article)
+                article_repository.save_article(en_article, payload, scope)
             else:
                 keywords = build_keywords(payload.commodity, scope.article_type, scope)
                 confidence, status = compute_confidence(article, payload, translations, keywords)
@@ -349,29 +351,7 @@ def stage_generate_and_assemble(
                     article, payload, scope, "en", confidence, status, run_id
                 )
                 write_article_file(en_article)
-
-                try:
-                    insert_article({
-                        "id": f"{scope.scope_key}_{date}_en_{run_id}",
-                        "commodity_slug": payload.commodity,
-                        "article_date": date,
-                        "article_type": scope.article_type,
-                        "scope_key": scope.scope_key,
-                        "language": "en",
-                        "title": article.title,
-                        "meta_description": article.meta_description,
-                        "body_html": article.body_html,
-                        "keywords": json.dumps(article.keywords),
-                        "json_ld": json.dumps(en_article.json_ld),
-                        "faq_json_ld": json.dumps(en_article.faq_json_ld),
-                        "faqs": json.dumps(en_article.faqs),
-                        "pre_computed_analytics": payload.model_dump_json(),
-                        "confidence_score": confidence,
-                        "publish_status": status,
-                        "pipeline_run_id": run_id,
-                    })
-                except Exception as e:
-                    logger.debug("DB insert failed (non-fatal): %s", e)
+                article_repository.save_article(en_article, payload, scope)
 
             counts[status] = counts.get(status, 0) + 1
 
@@ -381,6 +361,7 @@ def stage_generate_and_assemble(
                         article, payload, scope, lang_code, confidence, status, run_id, translated
                     )
                     write_article_file(tr_article)
+                    article_repository.save_article(tr_article, payload, scope)
                     if scope.scope_key == "soybean_nagpur":
                         if lang_code == "hi":
                             config.demo_trans_hi_ok = True
@@ -415,6 +396,14 @@ def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool)
     if skip_publish:
         logger.info("Publishing explicitly skipped via CLI flag.")
         config.demo_publish_ok = False
+        return
+
+    if config.PUBLISHING_TARGET == "vercel":
+        logger.info(
+            "Publishing target is Vercel. Static GitHub Pages build is disabled; "
+            "new content is available to the Next.js app through Supabase immediately."
+        )
+        config.demo_publish_ok = True
         return
 
     # Skip in GITHUB_ACTIONS since deployment is run by GITHUB_ACTIONS deploy job.
@@ -691,7 +680,13 @@ def main() -> None:
         # Update pipeline run record
         from database import update_pipeline_run
         total_attempted = len(scope_targets)
+        records_processed = sum(
+            payload.record_count
+            for payload in analytics_map.values()
+            if payload.article_type == "daily_commodity_report"
+        )
         update_pipeline_run(run_id, {
+            "records_processed": records_processed,
             "articles_attempted": total_attempted,
             "articles_published": published,
             "articles_review": review,
