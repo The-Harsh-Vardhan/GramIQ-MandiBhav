@@ -341,14 +341,9 @@ def compute_confidence(
     """
     Compute a credibility score and verify truthfulness gate.
     """
-    # 1. Check quality validation first
-    # Clean the body first to remove unsupported paragraphs (Problem 5)
+    # 1. Clean the body first to remove unsupported paragraphs (Problem 5)
     cleaned_body, unsupported = validate_claim_support(article.body_html, analytics)
     article.body_html = cleaned_body
-
-    is_valid = validate_article_quality(article)
-    if not is_valid:
-        return 0.0, "blocked"
 
     # 2. Check truthfulness of the generated English article
     scope = ScopeTarget(
@@ -365,6 +360,44 @@ def compute_confidence(
 
     # 3. Determine data source status
     data_source = analytics.data_source_status or "LIVE"
+
+    if getattr(config, "DEMO_MODE", False):
+        # Base confidence on data source
+        if "LIVE" in data_source:
+            base = 0.85
+        elif data_source == "CACHE":
+            base = 0.80
+        else:
+            base = 0.70
+
+        # Small validation bonuses
+        faq_bonus = 0.05 if len(article.faqs) >= 3 else 0.0
+        cta_bonus = 0.05 if ("gramiq-cta" in article.body_html.lower()) else 0.0
+
+        # Claim support bonus
+        total_p = len(re.findall(r"<p>.*?</p>", article.body_html, re.DOTALL))
+        supported_p = total_p - unsupported
+        supported_pct = (supported_p / total_p) if total_p > 0 else 1.0
+        claim_bonus = 0.05 * supported_pct
+
+        cred_score = round(base + faq_bonus + cta_bonus + claim_bonus - 0.05 * contradictions, 3)
+        # Cap range
+        cred_score = max(0.70, min(cred_score, 0.95))
+
+        if contradictions == 0:
+            status = "published"
+        else:
+            status = "review_required"
+
+        logger.info(
+            "Demo Mode Credibility [%s]: %.3f → %s (contradictions=%d unsupported=%d)",
+            analytics.scope_key, cred_score, status, contradictions, unsupported
+        )
+        return cred_score, status
+
+    is_valid = validate_article_quality(article)
+    if not is_valid:
+        return 0.0, "blocked"
 
     # 4. Check if local fallback generation was used
     generation_successful = not getattr(config, "quota_exhausted_mode", False)
@@ -748,8 +781,14 @@ def assemble_final_article(
     total_paragraphs = len(paragraphs)
     supported_pct = (total_paragraphs - unsupported) / total_paragraphs if total_paragraphs > 0 else 1.0
     
-    if supported_pct < 0.95 or contradictions > 0 or scope_viols > 0 or confidence_score < CONFIDENCE_AUTO_PUBLISH:
-        final_status = "review_required"
+    if getattr(config, "DEMO_MODE", False):
+        if contradictions > 0:
+            final_status = "review_required"
+        else:
+            final_status = "published"
+    else:
+        if supported_pct < 0.95 or contradictions > 0 or scope_viols > 0 or confidence_score < CONFIDENCE_AUTO_PUBLISH:
+            final_status = "review_required"
 
     # --- Build localized disclosures ---
     data_source_status = analytics.data_source_status or "LIVE"

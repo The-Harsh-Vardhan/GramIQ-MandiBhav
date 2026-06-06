@@ -63,6 +63,7 @@ def fetch_ogd_raw_records(
     state_filter: Optional[str] = None,
     market_filter: Optional[str] = None,
     limit: int = 5000,
+    timeout: Optional[tuple[float, float]] = None,
 ) -> list[dict]:
     """
     Fetches raw records from OGD API paginated, with optional filtering.
@@ -115,7 +116,8 @@ def fetch_ogd_raw_records(
             "OGD Discovery Fetch: URL=%s params=%s", url, params
         )
 
-        max_attempts = 3
+        timeout_val = timeout or (config.OGD_CONNECT_TIMEOUT, config.OGD_READ_TIMEOUT)
+        max_attempts = 1 if timeout else 3
         success = False
         for attempt in range(1, max_attempts + 1):
             try:
@@ -123,7 +125,7 @@ def fetch_ogd_raw_records(
                     url,
                     params=params,
                     headers=headers,
-                    timeout=(config.OGD_CONNECT_TIMEOUT, config.OGD_READ_TIMEOUT),
+                    timeout=timeout_val,
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -490,56 +492,113 @@ def select_demo_market(
     preferred_state: Optional[str] = "Maharashtra",
 ) -> dict:
     """
-    Selects the best available market and date for a commodity demo.
+    Selects the best available market and date for a commodity demo using live OGD data.
     """
     if not target_date:
         target_date = date_cls.today().isoformat()
     norm_date = normalize_date(target_date)
 
-    logger.info(
-        "Selecting demo market for %s on %s (preferred market=%s state=%s)...",
-        commodity_slug,
-        norm_date,
-        preferred_market,
-        preferred_state,
-    )
+    using_live = False
+    records = []
+    commodity_found = commodity_slug
 
-    # Fetch available markets on this date
-    markets = find_available_markets(commodity_slug, norm_date)
+    if config.PIPELINE_MODE == "dev":
+        # Dev mode uses mock records directly (keep tests offline)
+        records = fetch_mock_raw_records(commodity_slug)
+        using_live = False
+    else:
+        # Fetch Soybean from OGD
+        for val in config.OGD_COMMODITY_FILTERS.get("soybean", ["Soyabean", "Soybean"]):
+            try:
+                raw = fetch_ogd_raw_records(date=norm_date, commodity_filter=val, timeout=(2.0, 5.0))
+                if raw:
+                    records = raw
+                    using_live = True
+                    commodity_found = "soybean"
+                    break
+            except Exception as e:
+                logger.warning("Failed to fetch OGD Soyabean records for %s on %s: %s", val, norm_date, e)
 
-    # Priorities 1, 2, 3
-    selected = select_market_from_list(
-        markets,
-        preferred_market=preferred_market,
-        preferred_state=preferred_state,
-    )
-    if selected:
-        logger.info(
-            "Demo market selection matched on target date %s: %s, %s",
-            norm_date,
-            selected["market"],
-            selected["state"],
+        # If no Soyabean records, try Cotton
+        if not records:
+            for val in config.OGD_COMMODITY_FILTERS.get("cotton", ["Cotton"]):
+                try:
+                    raw = fetch_ogd_raw_records(date=norm_date, commodity_filter=val, timeout=(2.0, 5.0))
+                    if raw:
+                        records = raw
+                        using_live = True
+                        commodity_found = "cotton"
+                        break
+                except Exception as e:
+                    logger.warning("Failed to fetch OGD Cotton records for %s on %s: %s", val, norm_date, e)
+
+        # If still no records, try fetching all commodities today
+        if not records:
+            try:
+                raw = fetch_ogd_raw_records(date=norm_date, timeout=(2.0, 5.0))
+                if raw:
+                    records = raw
+                    using_live = True
+                    # Dynamically determine commodity from first record
+                    comm_name = get_field_val(raw[0], "commodity").lower()
+                    if "soy" in comm_name:
+                        commodity_found = "soybean"
+                    elif "cotton" in comm_name or "kapas" in comm_name:
+                        commodity_found = "cotton"
+                    else:
+                        commodity_found = "soybean"
+            except Exception as e:
+                logger.warning("Failed to fetch OGD records today without filter: %s", e)
+
+    # Logging based on data source
+    if using_live:
+        logger.info("Using LIVE OGD DATA")
+    else:
+        logger.info("Using MOCK DATA\nReason: OGD unavailable")
+        # Fall back to MockProvider
+        records = fetch_mock_raw_records(commodity_slug)
+        commodity_found = commodity_slug
+
+    # Select the first record with valid market and state
+    selected_record = None
+    if records:
+        for r in records:
+            if get_field_val(r, "market") and get_field_val(r, "state"):
+                selected_record = r
+                break
+        if not selected_record:
+            selected_record = records[0]
+
+    if not selected_record:
+        # Fallback to absolute defaults
+        selected_market = "Nagpur APMC"
+        selected_state = "Maharashtra"
+        market_records_count = 0
+    else:
+        selected_market = get_field_val(selected_record, "market")
+        selected_state = get_field_val(selected_record, "state")
+        
+        # Count records matching this market and state in our fetched list
+        market_records_count = sum(
+            1 for r in records
+            if get_field_val(r, "market") == selected_market
+            and get_field_val(r, "state") == selected_state
         )
-        return {
-            "date": norm_date,
-            "market": selected["market"],
-            "state": selected["state"],
-            "records": selected["records"],
-        }
 
-    # Priority 4: Most recent historical record search backward
+    # Log in specific format
+    logger.info("Found %d Soyabean records today.", len(records) if "soy" in commodity_found else 0)
     logger.info(
-        "No live records for %s on target date %s. Searching historical fallback...",
-        commodity_slug,
-        norm_date,
+        "Selected:\n"
+        "Market: %s\n"
+        "State: %s",
+        selected_market,
+        selected_state
     )
-    historical = find_latest_available_data(
-        commodity_slug,
-        preferred_market=preferred_market,
-        preferred_state=preferred_state,
-        target_date=norm_date,
-    )
-    if historical:
-        return historical
 
-    return {}
+    return {
+        "date": norm_date,
+        "market": selected_market,
+        "state": selected_state,
+        "records": market_records_count,
+        "commodity": commodity_found
+    }

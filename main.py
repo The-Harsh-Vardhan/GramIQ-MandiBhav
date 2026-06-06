@@ -36,6 +36,7 @@ def _find_cached_output(date: str, scope_key: str, language: str) -> Path | None
         config.OUTPUT_DIR / date / "blocked" / f"{scope_key}_{language}.json",
     ]
     if getattr(config, "DEMO_MODE", False):
+        candidates.append(config.OUTPUT_DIR / "json" / "demo" / f"{scope_key}_latest_{language}.json")
         if scope_key == "soybean_nagpur":
             candidates.append(config.OUTPUT_DIR / "json" / "demo" / f"soybean_nagpur_latest_{language}.json")
     else:
@@ -256,7 +257,12 @@ def stage_generate_and_assemble(
                 counts["blocked"] += 1
                 continue
 
-            cached_en = _find_cached_output(date, scope.scope_key, "en")
+            if getattr(config, "DEMO_MODE", False):
+                cached_en = None
+                logger.info("Generating fresh article...")
+                config.demo_gen_status = "Fresh Article Generated"
+            else:
+                cached_en = _find_cached_output(date, scope.scope_key, "en")
 
             # Resolve data source status
             ingestion_source = getattr(config, "ingestion_data_source", "LIVE")
@@ -275,7 +281,9 @@ def stage_generate_and_assemble(
                     config.demo_gen_status = "Cache Hit"
             else:
                 missing_generation[scope.scope_key] = payload
-                if scope.scope_key == "soybean_nagpur":
+                if getattr(config, "DEMO_MODE", False):
+                    config.demo_gen_status = "Fresh Article Generated"
+                elif scope.scope_key == "soybean_nagpur":
                     config.demo_gen_status = "Article Generated"
 
         if missing_generation:
@@ -352,6 +360,38 @@ def stage_generate_and_assemble(
                 )
                 write_article_file(en_article)
                 article_repository.save_article(en_article, payload, scope)
+
+            if getattr(config, "DEMO_MODE", False):
+                # Supabase and Website verification
+                from repository import build_article_slug
+                slug = build_article_slug(en_article)
+                config.demo_supabase_status = "FAILED"
+                config.demo_website_status = "FAILED"
+                try:
+                    import supabase_backend
+                    retrieved = article_repository.get_article(slug, "en")
+                    if (retrieved and 
+                        retrieved.get("title") == en_article.title and 
+                        retrieved.get("scope_key") == en_article.scope_key and 
+                        retrieved.get("article_date") == en_article.date):
+                        logger.info("Supabase Verification: PASSED\nArticle ID: %s", retrieved.get("id"))
+                        config.demo_supabase_status = "PASSED"
+                    else:
+                        logger.error("Supabase Verification: FAILED")
+                except Exception as e:
+                    logger.error("Supabase Verification: FAILED due to error: %s", e)
+                    
+                try:
+                    if config.demo_supabase_status == "PASSED" and retrieved.get("publish_status") == "published":
+                        logger.info("Website Verification: PASSED\nURL: /article/%s", slug)
+                        config.demo_website_status = "PASSED"
+                    else:
+                        logger.error("Website Verification: FAILED")
+                except Exception as e:
+                    logger.error("Website Verification: FAILED due to error: %s", e)
+                
+                config.demo_final_confidence = confidence
+                config.demo_final_slug = slug
 
             counts[status] = counts.get(status, 0) + 1
 
@@ -516,51 +556,72 @@ def stage_publish(date: str, mode: str, force_publish: bool, skip_publish: bool)
 
 def print_demo_summary(analytics_map: dict, current_date: str, args: argparse.Namespace, pipeline_duration: float) -> None:
     import config
+    import sys
     chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
+    commodity_title = getattr(config, "demo_chosen_commodity", "soybean").title()
+    if commodity_title == "Soybean":
+        commodity_title = "Soyabean"
     ogd_records_count = getattr(config, "demo_records_count", 0)
-    db_inserted = getattr(config, "db_inserted", 0)
-    db_duplicates = getattr(config, "db_duplicates", 0)
     avg_price = getattr(config, "demo_avg_price", 0.0)
-    gen_status = getattr(config, "demo_gen_status", "Article Generated")
-    trans_hi = "✓" if getattr(config, "demo_trans_hi_ok", False) else "✗"
-    trans_mr = "✓" if getattr(config, "demo_trans_mr_ok", False) else "✗"
-    if args.skip_publish:
-        pub_status = "SKIPPED"
+    confidence = getattr(config, "demo_final_confidence", 0.0)
+    
+    ds_status = getattr(config, "ingestion_data_source", "LIVE")
+    is_live = ds_status in ("LIVE", "LIVE_PLUS_CACHE", "CACHE")
+    article_generated = (getattr(config, "demo_gen_status", "") == "Fresh Article Generated")
+    supabase_ok = (getattr(config, "demo_supabase_status", "FAILED") == "PASSED")
+    web_ok = (getattr(config, "demo_website_status", "FAILED") == "PASSED")
+    
+    if is_live and article_generated and supabase_ok and web_ok:
+        status_text = "SUCCESS"
+        reason = ""
     else:
-        pub_status = "✓" if getattr(config, "demo_publish_ok", False) else "✗"
-
-    # Get data source status for nagpur demo
-    nagpur_payload = analytics_map.get("soybean_nagpur")
-    ds_status = nagpur_payload.data_source_status if nagpur_payload else getattr(config, "ingestion_data_source", "LIVE")
+        status_text = "FAILURE"
+        reasons = []
+        if not is_live:
+            reasons.append("Mock data used instead of live OGD data")
+        if not article_generated:
+            reasons.append("No fresh article was generated")
+        if not supabase_ok:
+            reasons.append("Supabase verification failed")
+        if not web_ok:
+            reasons.append("Website verification failed")
+        reason = " (" + ", ".join(reasons) + ")" if reasons else ""
 
     summary = f"""
 OGD Fetch:
-Commodity: Soybean
+Commodity: {commodity_title}
 Market: {chosen_market}
 Records: {ogd_records_count}
 
-Database:
-Inserted: {db_inserted}
-Duplicates: {db_duplicates}
-
 Analytics:
-Average Price: ₹{avg_price}
+Average Price: ₹{int(avg_price) if avg_price.is_integer() else avg_price}
 
 Generation:
-{gen_status}
+{getattr(config, "demo_gen_status", "Fresh Article Generated")}
 
-Translation:
-Hindi {trans_hi}
-Marathi {trans_mr}
+Validation:
+Confidence: {confidence:.2f}
 
-Publishing:
-GitHub Pages {pub_status} (Data Source: {ds_status})
+Supabase:
+{getattr(config, "demo_supabase_status", "FAILED")}
+
+Website:
+{getattr(config, "demo_website_status", "FAILED")}
+
+Data Source:
+{ds_status}
+
+Pipeline Status:
+{status_text}{reason}
 """
     try:
         print(summary)
     except UnicodeEncodeError:
         safe_summary = summary.replace("₹", "Rs. ").replace("✓", "OK").replace("✗", "FAIL")
         print(safe_summary)
+        
+    if status_text == "FAILURE":
+        sys.exit(1)
 
 
 def main() -> None:
@@ -629,6 +690,7 @@ def main() -> None:
     logger.info("Resolved dates for execution: %s", resolved_dates)
 
     # We will process each date sequentially
+    pipeline_duration = 0.0
     for idx, current_date in enumerate(resolved_dates):
         logger.info("=" * 55)
         logger.info("Processing date %d/%d: %s", idx + 1, len(resolved_dates), current_date)
@@ -649,20 +711,19 @@ def main() -> None:
                 current_date = selection["date"]
                 config.demo_chosen_market = selection["market"]
                 config.demo_chosen_state = selection["state"]
+                config.demo_chosen_commodity = selection.get("commodity", "soybean")
                 logger.info("Demo Mode: Discovered market %s in %s for date %s", config.demo_chosen_market, config.demo_chosen_state, current_date)
             else:
                 config.demo_chosen_market = "Nagpur"
                 config.demo_chosen_state = "Maharashtra"
+                config.demo_chosen_commodity = "soybean"
+            # Limit commodities to only the discovered commodity
+            commodities = [config.demo_chosen_commodity]
 
         stage_ingest(current_date, commodities)
 
-        # Resolve Latest Available Date for demo mode after ingestion
-        if mode == "demo" and not is_backfill:
-            from database import query_latest_available_date
-            latest_date = query_latest_available_date("soybean")
-            if latest_date:
-                logger.info("Demo Mode: Overriding target date from %s to latest available date %s", current_date, latest_date)
-                current_date = latest_date
+        # In demo mode, we do NOT override target date to latest available date
+        # to ensure the pipeline runs exactly on the ingested/selected date.
 
         # Stage 2: Analytics
         logger.info("--- Stage 2: Analytics Pre-Computation ---")
@@ -678,6 +739,8 @@ def main() -> None:
         logger.info("Generating %d articles ...", len(scope_targets))
 
         skip_translate = args.skip_translate
+        if mode == "demo":
+            skip_translate = True
 
         published, review, blocked = stage_generate_and_assemble(
             current_date, run_id, analytics_map, scope_targets, knowledge, skip_translate

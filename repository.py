@@ -23,6 +23,20 @@ def slugify(value: str) -> str:
 
 
 def build_article_slug(final_article: FinalArticleJSON) -> str:
+    if getattr(config, "DEMO_MODE", False):
+        comm = slugify(final_article.commodity)
+        scope = slugify(final_article.scope_key)
+        # remove commodity prefix from scope if present
+        if scope.startswith(f"{comm}-"):
+            scope = scope[len(comm)+1:]
+        elif scope == comm:
+            scope = ""
+        parts = [comm]
+        if scope:
+            parts.append(scope)
+        parts.append(slugify(final_article.date))
+        return "-".join(p for p in parts if p)
+
     return slugify(f"{final_article.commodity} {final_article.scope_key} {final_article.date}")
 
 

@@ -150,7 +150,7 @@ def compute_analytics(
     logger.info("[OGD DIAGNOSTICS] Commodity: %s | Unique Markets: %d | Unique Varieties: %d | Unique Grades: %d", commodity, unique_markets, unique_varieties, unique_grades)
 
     if getattr(config, "DEMO_MODE", False):
-        if commodity != "soybean":
+        if commodity != getattr(config, "demo_chosen_commodity", "soybean"):
             return {}
         chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
         today_rows = [r for r in today_rows if chosen_market.lower() in str(r.get("market_name") or r.get("market") or "").lower()]
@@ -168,7 +168,9 @@ def compute_analytics(
 
     if getattr(config, "DEMO_MODE", False):
         chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
-        # Simplify to Selected Nagpur/Fallback Soybean Metrics
+        from repository import slugify
+        scope_key = f"{commodity}_{slugify(chosen_market).replace('-', '_')}"
+        # Simplify to Selected Market Metrics
         avg_price = today_df["modal_price"].mean()
         total_arrivals = today_df["arrival_tonnes"].sum()
 
@@ -184,9 +186,9 @@ def compute_analytics(
             commodity=commodity,
             date=date,
             article_type="price_snapshot_report",
-            scope_key="soybean_nagpur",
+            scope_key=scope_key,
             scope_label=chosen_market,
-            state="Maharashtra",
+            state=today_rows[0].get("state", "Maharashtra") if today_rows else "Maharashtra",
             market=chosen_market,
             national_avg_modal=round(avg_price, 2),
             national_day_change_pct=national_day_change_pct,
@@ -203,11 +205,11 @@ def compute_analytics(
         payload = _inject_knowledge(payload, knowledge, date)
         payload.record_count = getattr(config, "demo_records_count", 0)
         payload.data_source_status = getattr(config, "ingestion_data_source", "LIVE")
-        results = {"soybean_nagpur": payload}
+        results = {scope_key: payload}
 
         logger.info(
-            "Demo Mode: %s Soybean Analytics computed on %s: 1 scope generated (soybean_nagpur)",
-            chosen_market, date
+            "Demo Mode: %s %s Analytics computed on %s: 1 scope generated (%s)",
+            chosen_market, commodity.title(), date, scope_key
         )
         # Store average price in config for logging at the end
         config.demo_avg_price = round(avg_price, 2)
@@ -420,8 +422,11 @@ def build_scope_matrix(date: str, knowledge: dict) -> tuple[dict[str, AnalyticsP
             ))
 
     if getattr(config, "DEMO_MODE", False):
+        from repository import slugify
+        chosen_market = getattr(config, "demo_chosen_market", "Nagpur")
         allowed_demo_scopes = {
-            "soybean_nagpur",
+            f"{commodity}_{slugify(chosen_market).replace('-', '_')}"
+            for commodity in COMMODITIES
         }
         scope_targets = [s for s in scope_targets if s.scope_key in allowed_demo_scopes]
 

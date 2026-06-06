@@ -690,6 +690,14 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
     if db_records:
         logger.info("Database cache hit for %s on %s. Skipping OGD API query.", commodity, norm_date)
         config.ingestion_data_source = "CACHE"
+        db_source = db_records[0].get("source", "ogd_api") if db_records else "ogd_api"
+        if getattr(config, "DEMO_MODE", False):
+            if db_source == "mock":
+                logger.info("Using MOCK DATA\nReason: OGD unavailable")
+                config.ingestion_data_source = "MOCK"
+            else:
+                logger.info("Using LIVE OGD DATA")
+                config.ingestion_data_source = "LIVE"
         records = []
         for r in db_records:
             try:
@@ -711,6 +719,17 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
             except Exception as e:
                 logger.warning("Failed to parse DB record as MarketRecord: %s | Error: %s", r, e)
         if records:
+            if getattr(config, "DEMO_MODE", False):
+                # Ensure config.demo_chosen_market matches what's in the cache
+                chosen = getattr(config, "demo_chosen_market", "Nagpur")
+                chosen_clean = re.sub(r"\s+apmc\b", "", chosen, flags=re.IGNORECASE).strip().lower()
+                matched_records = [r for r in records if chosen_clean in r.market.lower()]
+                if matched_records:
+                    config.demo_chosen_market = matched_records[0].market
+                    config.demo_chosen_state = matched_records[0].state
+                else:
+                    config.demo_chosen_market = records[0].market
+                    config.demo_chosen_state = records[0].state
             config.demo_records_count = len(records)
             return records
 
@@ -741,7 +760,14 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
 
     config.demo_records_count = len(records)
 
-    source = "mock" if isinstance(actual_provider, MockProvider) else "ogd_api"
+    source = "mock" if (isinstance(actual_provider, MockProvider) or getattr(config, "ingestion_data_source", "LIVE") == "MOCK") else "ogd_api"
+    if getattr(config, "DEMO_MODE", False):
+        if source == "mock":
+            logger.info("Using MOCK DATA\nReason: OGD unavailable")
+            config.ingestion_data_source = "MOCK"
+        else:
+            logger.info("Using LIVE OGD DATA")
+            config.ingestion_data_source = "LIVE"
     inserted = insert_market_records(records, source=source)
     logger.info("Stored %d new records for %s (%s)", inserted, commodity, date)
 
