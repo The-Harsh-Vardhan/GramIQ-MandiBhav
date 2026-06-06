@@ -10,7 +10,7 @@
 ## Supabase setup
 
 1. Create a new Supabase project.
-2. Apply the SQL schema in [202606060001_initial_schema.sql](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/supabase/migrations/202606060001_initial_schema.sql>).
+2. Apply the SQL schema in [202606060001_initial_schema.sql](../supabase/migrations/202606060001_initial_schema.sql).
 3. Set these root `.env` values:
 
 ```dotenv

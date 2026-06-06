@@ -65,24 +65,39 @@ def _request(
     prefer: Optional[str] = None,
 ) -> Any:
     require_configured()
-    response = requests.request(
-        method=method,
-        url=_url(table),
-        headers=_headers(prefer),
-        params=params,
-        json=payload,
-        timeout=config.SUPABASE_REQUEST_TIMEOUT,
-    )
-    if response.status_code >= 400:
-        raise SupabaseBackendError(
-            f"Supabase {table} {method} failed: {response.status_code} {response.text}"
-        )
-    if not response.text:
-        return None
-    try:
-        return response.json()
-    except json.JSONDecodeError:
-        return response.text
+    import time
+    max_attempts = 4
+    backoff = 1.0
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.request(
+                method=method,
+                url=_url(table),
+                headers=_headers(prefer),
+                params=params,
+                json=payload,
+                timeout=config.SUPABASE_REQUEST_TIMEOUT,
+            )
+            if response.status_code >= 400:
+                raise SupabaseBackendError(
+                    f"Supabase {table} {method} failed: {response.status_code} {response.text}"
+                )
+            if not response.text:
+                return None
+            try:
+                return response.json()
+            except json.JSONDecodeError:
+                return response.text
+        except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as e:
+            logger.warning(
+                "Supabase %s request to table %s failed on attempt %d of %d: %s. Retrying...",
+                method, table, attempt, max_attempts, e
+            )
+            if attempt == max_attempts:
+                raise e
+            time.sleep(backoff)
+            backoff *= 2.0
 
 
 def insert_market_records(records: list, source: str = "mock") -> int:

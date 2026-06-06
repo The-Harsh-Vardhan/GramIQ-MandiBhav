@@ -93,3 +93,6 @@ web/.vercel/
 # --- Logs ---
 *.log
 logs/
+
+# --- Extras folder (unnecessary / temp files) ---
+extras/

@@ -23,7 +23,7 @@ end state is `DATA_BACKEND=supabase` and `PUBLISHING_TARGET=vercel`.
 
 ## Quick Start
 
-Detailed setup lives in [docs/quickstart.md](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/docs/quickstart.md>).
+Detailed setup lives in [docs/quickstart.md](docs/quickstart.md).
 
 Minimal setup:
 
@@ -156,21 +156,21 @@ python main.py --evaluate-only --date 2026-06-04
 pytest
 ```
 
-Frontend setup and deployment are in [docs/supabase-vercel-migration.md](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/docs/supabase-vercel-migration.md>).
+Frontend setup and deployment are in [docs/supabase-vercel-migration.md](docs/supabase-vercel-migration.md).
 
 ## Project Files To Know
 
 | File | Role |
 |---|---|
-| [config.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/config.py>) | env vars, paths, OGD constants |
-| [ingestion.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/ingestion.py>) | mock/live providers and ingestion flow |
-| [analytics.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/analytics.py>) | Python-only analytics |
-| [main.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/main.py>) | pipeline orchestration |
-| [repository.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/repository.py>) | canonical article persistence abstraction |
-| [supabase_backend.py](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/supabase_backend.py>) | Supabase REST storage adapter |
-| [web/package.json](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/web/package.json>) | Next.js frontend for Vercel |
-| [docs/quickstart.md](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/docs/quickstart.md>) | setup and troubleshooting |
-| [.env.example](</c:/D Drive/Projects/Summers 2026/GramIQ MandiBhav/.env.example>) | starter env template |
+| [config.py](config.py) | env vars, paths, OGD constants |
+| [ingestion.py](ingestion.py) | mock/live providers and ingestion flow |
+| [analytics.py](analytics.py) | Python-only analytics |
+| [main.py](main.py) | pipeline orchestration |
+| [repository.py](repository.py) | canonical article persistence abstraction |
+| [supabase_backend.py](supabase_backend.py) | Supabase REST storage adapter |
+| [web/package.json](web/package.json) | Next.js frontend for Vercel |
+| [docs/quickstart.md](docs/quickstart.md) | setup and troubleshooting |
+| [.env.example](.env.example) | starter env template |
 
 ## Tests
 
