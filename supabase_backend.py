@@ -152,6 +152,24 @@ def query_latest_available_date(commodity: str) -> Optional[str]:
     return rows[0].get("market_date")
 
 
+def query_latest_date_before_or_equal(commodity: str, target_date: str) -> Optional[str]:
+    rows = _request(
+        "GET",
+        "market_data",
+        params={
+            "select": "market_date",
+            "commodity_slug": f"eq.{commodity.lower()}",
+            "market_date": f"lte.{normalize_date(target_date)}",
+            "order": "market_date.desc",
+            "limit": "1",
+        },
+    ) or []
+    if not rows:
+        return None
+    return rows[0].get("market_date")
+
+
+
 def upsert_article(record: dict[str, Any]) -> dict[str, Any]:
     rows = _request(
         "POST",

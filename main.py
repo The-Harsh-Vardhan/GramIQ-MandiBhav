@@ -110,9 +110,9 @@ Examples:
     )
     parser.add_argument(
         "--mode",
-        choices=["dev", "live", "demo"],
+        choices=["dev", "live", "demo", "historical"],
         default=None,
-        help="Pipeline mode: 'dev' uses CSV fixtures, 'live' uses OGD API, 'demo' runs limited demo (default: from PIPELINE_MODE env var)",
+        help="Pipeline mode: 'dev' uses CSV fixtures, 'live' uses OGD API, 'demo' runs limited demo, 'historical' runs on live historical date (default: from PIPELINE_MODE env var)",
     )
     parser.add_argument(
         "--commodities",
@@ -642,6 +642,18 @@ def main() -> None:
 
         # Stage 1: Ingest
         logger.info("--- Stage 1: Data Ingestion ---")
+        if mode == "demo" and not is_backfill:
+            from mandibhav.discovery import select_demo_market
+            selection = select_demo_market(commodity_slug="soybean", target_date=current_date)
+            if selection:
+                current_date = selection["date"]
+                config.demo_chosen_market = selection["market"]
+                config.demo_chosen_state = selection["state"]
+                logger.info("Demo Mode: Discovered market %s in %s for date %s", config.demo_chosen_market, config.demo_chosen_state, current_date)
+            else:
+                config.demo_chosen_market = "Nagpur"
+                config.demo_chosen_state = "Maharashtra"
+
         stage_ingest(current_date, commodities)
 
         # Resolve Latest Available Date for demo mode after ingestion

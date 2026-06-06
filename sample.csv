@@ -1,0 +1,6 @@
+State,District,Market,Commodity,Variety,Grade,Arrival_Date,Min_x0020_Price,Max_x0020_Price,Modal_x0020_Price
+"Madhya Pradesh",Sidhi,"Sidhi APMC",Wheat,"Mill Quality",Non-FAQ,06/06/2026,2300,2310,2300
+Bihar,Begusarai,"Balliah APMC",Onion,"1st Sort","Grade C",06/06/2026,1800,1800,1800
+Haryana,Rewari,"Kosli APMC","Bhindi(Ladies Finger)",Bhindi,FAQ,06/06/2026,2000,2000,2000
+Haryana,Rewari,"Kosli APMC",Pumpkin,Other,FAQ,06/06/2026,1000,1000,1000
+Haryana,Sonipat,"Ganaur APMC","Bottle gourd","Bottle Gourd",Medium,06/06/2026,1500,2000,1800

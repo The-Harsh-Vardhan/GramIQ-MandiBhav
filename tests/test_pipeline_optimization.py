@@ -84,8 +84,10 @@ def test_assemble_article_output_is_deterministic():
     assert len(article.faqs) >= 3
 
 
-def test_write_article_file_uses_unique_review_filename():
+def test_write_article_file_uses_unique_review_filename(monkeypatch):
     from schemas import FinalArticleJSON
+    import config
+    monkeypatch.setattr(config, "WRITE_ARTICLE_ARTIFACTS", True)
     tmp_path = Path("C:/tmp/mandibhav-review-test")
     tmp_path.mkdir(parents=True, exist_ok=True)
 

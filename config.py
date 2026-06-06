@@ -84,8 +84,10 @@ import sys
 if "pytest" in sys.modules or "unittest" in sys.modules:
     os.environ["PIPELINE_MODE"] = "dev"
     os.environ["DEMO_MODE"] = "false"
-PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "demo")  # "dev" | "live" | "demo"
+PIPELINE_MODE: str = os.environ.get("PIPELINE_MODE", "demo")  # "dev" | "live" | "demo" | "historical"
 DEMO_MODE: bool = (os.environ.get("DEMO_MODE", "false").lower() == "true") or (PIPELINE_MODE == "demo")
+demo_chosen_market: str = "Nagpur"
+demo_chosen_state: str = "Maharashtra"
 DEBUG_OGD_SCHEMA: bool = os.environ.get("DEBUG_OGD_SCHEMA", "false").lower() == "true"
 quota_exhausted_mode: bool = False
 analytics_payloads_cache: dict = {}

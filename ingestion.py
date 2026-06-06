@@ -100,10 +100,11 @@ class MockProvider(DataProvider):
         csv_path = self.mock_dir / f"{commodity}_sample.csv"
         records = self._load_csv(csv_path, override_date=date)
         if getattr(config, "DEMO_MODE", False):
-            nagpur_records = [r for r in records if "nagpur" in r.market.lower()]
-            if nagpur_records:
-                config.demo_chosen_market = "Nagpur"
-                return nagpur_records
+            chosen = getattr(config, "demo_chosen_market", "Nagpur")
+            chosen_clean = re.sub(r"\s+apmc\b", "", chosen, flags=re.IGNORECASE).strip().lower()
+            matched_records = [r for r in records if chosen_clean in r.market.lower()]
+            if matched_records:
+                return matched_records
             elif records:
                 config.demo_chosen_market = records[0].market
                 return [records[0]]
@@ -476,79 +477,33 @@ class LiveProvider(DataProvider):
         all_raw: list[dict] = []
 
         if getattr(config, "PIPELINE_MODE", "demo") == "demo":
-            # Nagpur Demo Mode Ingestion
-            logger.info("Demo Mode: Fetching Soybean live data for Maharashtra...")
-            state_filter = "Maharashtra"
-            # Try Nagpur APMC direct filter first
+            # Dynamic Demo Mode Ingestion
+            state_filter = getattr(config, "demo_chosen_state", "Maharashtra")
+            market_filter = getattr(config, "demo_chosen_market", "Nagpur APMC")
+            logger.info("Demo Mode: Fetching %s live data for %s, %s on %s...", commodity, market_filter, state_filter, date)
+            
             for commodity_filter in filter_values:
                 raw = self._fetch_all_pages(
                     date=date,
                     commodity_filter=commodity_filter,
                     limit=limit,
                     state_filter=state_filter,
-                    market_filter="Nagpur APMC"
+                    market_filter=market_filter
                 )
                 if raw:
-                    logger.info("Demo Mode: Direct market filter found %d records for Nagpur APMC", len(raw))
+                    logger.info("Demo Mode: Direct market filter found %d records for %s", len(raw), market_filter)
                     all_raw = raw
                     break
             
-            # If Nagpur direct filter yielded nothing, fetch all Maharashtra soybean records and filter locally
             if not all_raw:
-                logger.info("Demo Mode: Direct Nagpur query returned 0 records. Fetching all Maharashtra Soybean records for local filtering.")
-                maharashtra_raw = []
-                for commodity_filter in filter_values:
-                    raw = self._fetch_all_pages(
-                        date=date,
-                        commodity_filter=commodity_filter,
-                        limit=limit,
-                        state_filter=state_filter
-                    )
-                    if raw:
-                        maharashtra_raw = raw
-                        break
+                comm_name = "Soyabean" if "soybean" in commodity_key else commodity.title()
+                logger.warning("No %s records found for %s on %s", comm_name, state_filter, date)
+                logger.warning("No records found for requested market. Searching historical data...")
                 
-                if maharashtra_raw:
-                    # Implement fallback priority logic: Nagpur -> Amravati -> Wardha -> Any Maharashtra market
-                    fallbacks = ["nagpur", "amravati", "wardha"]
-                    chosen_market = None
-                    for market_keyword in fallbacks:
-                        matched = [
-                            r for r in maharashtra_raw
-                            if market_keyword in str(r.get("Market_Name") or r.get("market") or "").lower()
-                        ]
-                        if matched:
-                            all_raw = matched
-                            chosen_market = matched[0].get("Market_Name") or matched[0].get("market") or market_keyword.title()
-                            logger.info("Demo Mode: Found local match for keyword '%s' -> Chosen market: %s (%d records)", market_keyword, chosen_market, len(matched))
-                            break
-                    
-                    if not all_raw:
-                        # Fallback to any Maharashtra market
-                        markets_found = set(str(r.get("Market_Name") or r.get("market") or "") for r in maharashtra_raw if (r.get("Market_Name") or r.get("market")))
-                        if markets_found:
-                            chosen_market = sorted(list(markets_found))[0]
-                            all_raw = [
-                                r for r in maharashtra_raw
-                                if str(r.get("Market_Name") or r.get("market") or "").lower() == chosen_market.lower()
-                            ]
-                            logger.info("Demo Mode: Fallback to first available Maharashtra market: %s (%d records)", chosen_market, len(all_raw))
-            
-            # Store chosen market name in config for Problem 10 logging
-            if all_raw:
-                chosen = all_raw[0].get("Market_Name") or all_raw[0].get("market") or "Nagpur APMC"
-                # Strip APMC suffix for display
-                chosen_clean = re.sub(r"\s+apmc\b", "", chosen, flags=re.IGNORECASE).strip()
-                config.demo_chosen_market = chosen_clean
-            else:
-                config.demo_chosen_market = "Nagpur"
-
-            if not all_raw:
-                logger.warning("Demo Mode: No live OGD data found for Nagpur/fallback markets. Falling back to MockProvider.")
+                logger.warning("Demo Mode: No live OGD data found for fallback markets. Falling back to MockProvider.")
                 config.ingestion_data_source = "MOCK"
                 mock_provider = MockProvider()
                 mock_records = mock_provider.fetch_market_data(date, commodity)
-                config.demo_chosen_market = "Nagpur"
                 return mock_records
         else:
             # --- Step 1: Date + Commodity ---
@@ -627,7 +582,7 @@ def get_provider() -> DataProvider:
     If PIPELINE_MODE=live but OGD_API_KEY is missing/invalid,
     logs a clear warning and falls back to MockProvider automatically.
     """
-    if PIPELINE_MODE in ("live", "demo"):
+    if PIPELINE_MODE in ("live", "demo", "historical"):
         try:
             provider = LiveProvider()
             logger.info("Using LiveProvider (OGD API)")
