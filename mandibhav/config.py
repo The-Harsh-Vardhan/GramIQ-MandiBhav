@@ -46,7 +46,7 @@ _load_dotenv()
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIR / "data"
 MOCK_DIR = DATA_DIR / "mock"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"

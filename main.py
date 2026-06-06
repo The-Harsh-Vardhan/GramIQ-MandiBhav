@@ -17,11 +17,15 @@ Pipeline flow:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 import uuid
 from datetime import date as date_cls
 from pathlib import Path
+
+# Inject mandibhav package path for flat imports compatibility
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "mandibhav"))
 
 logger = logging.getLogger("mandibhav.main")
 

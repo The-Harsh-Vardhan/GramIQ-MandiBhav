@@ -12,8 +12,13 @@ import argparse
 import json
 import logging
 import sqlite3
+import os
+import sys
 from pathlib import Path
 from typing import Any
+
+# Inject mandibhav package path for flat imports compatibility
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "mandibhav"))
 
 import config
 import supabase_backend

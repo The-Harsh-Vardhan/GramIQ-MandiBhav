@@ -42,6 +42,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 # Project imports
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "mandibhav"))
 
 from config import (
     OUTPUT_DIR, SITE_DIR, SITE_TEMPLATES_DIR, SITE_BASE_URL,

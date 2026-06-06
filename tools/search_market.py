@@ -3,8 +3,9 @@ import sys
 import sqlite3
 from pathlib import Path
 
-# Add root directory to python path
+# Add root directory and mandibhav directory to python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "mandibhav"))
 
 import config
 

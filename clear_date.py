@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import sqlite3
+import os
+import sys
+# Inject mandibhav package path for flat imports compatibility
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "mandibhav"))
+
 import argparse
 import shutil
 from pathlib import Path
