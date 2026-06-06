@@ -721,7 +721,8 @@ def ingest_commodity(date: str, commodity: str, provider: DataProvider) -> list[
         if records:
             if getattr(config, "DEMO_MODE", False):
                 # Ensure config.demo_chosen_market matches what's in the cache
-                chosen = getattr(config, "demo_chosen_market", "Nagpur")
+                import os
+                chosen = os.environ.get("FORCE_DEMO_MARKET", getattr(config, "demo_chosen_market", "Nagpur"))
                 chosen_clean = re.sub(r"\s+apmc\b", "", chosen, flags=re.IGNORECASE).strip().lower()
                 matched_records = [r for r in records if chosen_clean in r.market.lower()]
                 if matched_records:

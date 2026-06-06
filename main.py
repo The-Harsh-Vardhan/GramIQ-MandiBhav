@@ -708,9 +708,10 @@ def main() -> None:
             from mandibhav.discovery import select_demo_market
             selection = select_demo_market(commodity_slug="soybean", target_date=current_date)
             if selection:
+                import os
                 current_date = selection["date"]
-                config.demo_chosen_market = selection["market"]
-                config.demo_chosen_state = selection["state"]
+                config.demo_chosen_market = os.environ.get("FORCE_DEMO_MARKET", selection["market"])
+                config.demo_chosen_state = os.environ.get("FORCE_DEMO_STATE", selection["state"])
                 config.demo_chosen_commodity = selection.get("commodity", "soybean")
                 logger.info("Demo Mode: Discovered market %s in %s for date %s", config.demo_chosen_market, config.demo_chosen_state, current_date)
             else:

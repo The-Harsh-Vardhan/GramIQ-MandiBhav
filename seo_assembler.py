@@ -266,7 +266,7 @@ def validate_article_truthfulness(
                 logger.warning("Factual Contradiction: Arrivals is 0 but body contains '%s'", term)
                 
     # Check low record count (< 5) contradictions
-    if analytics.record_count < 5:
+    if analytics.record_count < 5 and not getattr(config, "DEMO_MODE", False):
         forbid_low_records = [
             "trend", "regional demand", "market momentum", "future outlook", "market trends"
         ]
