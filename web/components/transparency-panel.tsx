@@ -1,6 +1,15 @@
 import { formatDate, formatScore, titleCase } from "@/lib/format";
 import type { ArticleRecord } from "@/lib/types";
 
+function getDataSourceName(source: string) {
+  const norm = (source ?? "").toUpperCase();
+  if (norm === "LIVE") return "data.gov.in API (Live)";
+  if (norm === "CACHE") return "data.gov.in API (Cached)";
+  if (norm === "LIVE_PLUS_CACHE") return "data.gov.in API (Live+Cached)";
+  if (norm === "MOCK") return "data.gov.in API (Simulation)";
+  return "data.gov.in API";
+}
+
 export function TransparencyPanel({ article }: { article: ArticleRecord }) {
   return (
     <aside className="rounded-3xl border border-field/30 bg-field/10 p-6">
@@ -36,7 +45,7 @@ export function TransparencyPanel({ article }: { article: ArticleRecord }) {
         </div>
         <div className="flex justify-between gap-4">
           <dt>Data source</dt>
-          <dd>{titleCase(article.data_source)}</dd>
+          <dd className="font-medium text-slate-900">{getDataSourceName(article.data_source)}</dd>
         </div>
         <div className="flex justify-between gap-4">
           <dt>Updated</dt>

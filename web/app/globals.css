@@ -3,20 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --background: #f7f2e8;
-  --foreground: #1f2937;
+  --background: #f0f9ff;
+  --foreground: #1e293b;
 }
 
 html {
   background:
-    radial-gradient(circle at top left, rgba(242, 197, 114, 0.35), transparent 28%),
-    radial-gradient(circle at top right, rgba(124, 154, 61, 0.2), transparent 24%),
-    linear-gradient(180deg, #fffdf8 0%, #f7f2e8 100%);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 28%),
+    radial-gradient(circle at top right, rgba(22, 163, 74, 0.15), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
 }
 
 body {
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
+  top: 0px !important;
 }
 
 .font-serif {
@@ -25,4 +26,56 @@ body {
 
 .font-sans {
   font-family: var(--font-sans), sans-serif;
+}
+
+/* ==========================================================================
+   Google Translate Styling Overrides
+   ========================================================================== */
+.goog-te-gadget {
+  font-family: var(--font-sans), sans-serif !important;
+  color: transparent !important;
+}
+
+.goog-te-gadget span,
+.goog-te-gadget-simple span,
+.goog-logo-link {
+  display: none !important;
+}
+
+.goog-te-combo {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  border-radius: 12px !important;
+  outline: none !important;
+  box-shadow: 0 2px 8px rgba(30, 41, 59, 0.04) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.goog-te-combo:hover {
+  border-color: #1b4332 !important;
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.08) !important;
+}
+
+.goog-te-combo:focus {
+  border-color: #1b4332 !important;
+  box-shadow: 0 0 0 2px rgba(27, 67, 50, 0.15) !important;
+}
+
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
 }

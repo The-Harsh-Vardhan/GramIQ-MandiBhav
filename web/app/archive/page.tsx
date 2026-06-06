@@ -33,8 +33,8 @@ export default async function ArchivePage({ searchParams }: ArchivePageProps) {
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
       <div className="rounded-[2rem] border border-black/10 bg-white p-8">
-        <p className="font-sans text-xs uppercase tracking-[0.35em] text-river">Archive</p>
-        <h1 className="mt-2 font-serif text-5xl text-soil">Search the report ledger</h1>
+        <p className="font-sans text-xs uppercase tracking-[0.35em] text-river">Market Reports</p>
+        <h1 className="mt-2 font-serif text-5xl text-soil">Search Market Reports</h1>
         <form className="mt-8 grid gap-3 md:grid-cols-5">
           <input
             name="q"

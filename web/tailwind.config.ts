@@ -10,11 +10,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        soil: "#5a2a1a",
-        field: "#7c9a3d",
-        grain: "#f2c572",
-        river: "#1f5c72",
-        cloud: "#f7f2e8"
+        soil: "#1b4332",    // Forest green primary (replacing brown soil)
+        field: "#2d6a4f",   // Accent green
+        grain: "#38bdf8",   // Light blue (replacing yellow grain)
+        river: "#0284c7",   // Slate/Light Blue secondary
+        cloud: "#f0f9ff"    // Very light blue background tint (replacing cloud beige)
       }
     }
   },
